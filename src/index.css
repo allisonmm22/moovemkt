@@ -1,0 +1,397 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@layer base {
+  :root {
+    /* Cores do tema escuro profissional */
+    --background: 222 47% 6%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 10%;
+    --popover-foreground: 210 40% 98%;
+
+    /* Verde WhatsApp como primário */
+    --primary: 142 70% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 47% 14%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 222 47% 16%;
+    --muted-foreground: 215 20% 55%;
+
+    --accent: 142 70% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 222 47% 18%;
+    --input: 222 47% 14%;
+    --ring: 142 70% 45%;
+
+    --radius: 0.75rem;
+
+    /* Cores adicionais para o CRM */
+    --success: 142 70% 45%;
+    --warning: 38 92% 50%;
+    --info: 217 91% 60%;
+
+    /* Cores para status */
+    --online: 142 70% 45%;
+    --offline: 0 0% 50%;
+    --away: 38 92% 50%;
+
+    /* Gradientes */
+    --gradient-primary: linear-gradient(135deg, hsl(142 70% 45%) 0%, hsl(160 70% 40%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(222 47% 10%) 0%, hsl(222 47% 8%) 100%);
+    --gradient-sidebar: linear-gradient(180deg, hsl(222 47% 7%) 0%, hsl(222 47% 5%) 100%);
+
+    /* Sombras */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4), 0 2px 4px -2px hsl(0 0% 0% / 0.3);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5), 0 4px 6px -4px hsl(0 0% 0% / 0.4);
+    --shadow-glow: 0 0 20px hsl(142 70% 45% / 0.3);
+
+    /* Sidebar */
+    --sidebar-background: 222 47% 5%;
+    --sidebar-foreground: 210 40% 85%;
+    --sidebar-primary: 142 70% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 222 47% 12%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 222 47% 14%;
+    --sidebar-ring: 142 70% 45%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Scrollbar personalizada */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-background;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-muted rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
+
+@layer components {
+  /* Animações */
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .animate-slide-in {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn 0.2s ease-out;
+  }
+
+  .animate-pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
+  /* Cards com hover */
+  .card-hover {
+    @apply transition-all duration-300;
+  }
+
+  .card-hover:hover {
+    @apply shadow-lg;
+    transform: translateY(-2px);
+  }
+
+  /* Status indicators */
+  .status-online {
+    @apply bg-green-500;
+  }
+
+  .status-offline {
+    @apply bg-gray-500;
+  }
+
+  .status-away {
+    @apply bg-yellow-500;
+  }
+
+  /* Glassmorphism effect */
+  .glass {
+    @apply bg-card/80 backdrop-blur-lg border border-border/50;
+  }
+
+  /* Conversation card hover effects */
+  .conversation-card {
+    @apply transition-all duration-200 ease-out;
+    border-left: 3px solid transparent;
+  }
+
+  .conversation-card:hover {
+    @apply bg-muted/70;
+    transform: translateX(2px);
+  }
+
+  .conversation-card.active {
+    border-left-color: hsl(var(--primary));
+    @apply bg-primary/10;
+  }
+
+  .conversation-card.unread {
+    border-left-color: hsl(var(--primary));
+  }
+
+  /* Message bubbles */
+  .message-bubble {
+    @apply transition-all duration-200;
+  }
+
+  .message-bubble-sent {
+    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(160 70% 40%) 100%);
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.25);
+  }
+
+  .message-bubble-received {
+    @apply bg-muted;
+    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.15);
+  }
+
+  /* Typing indicator */
+  .typing-indicator {
+    @apply flex items-center gap-1 px-3 py-2;
+  }
+
+  .typing-dot {
+    @apply w-2 h-2 rounded-full bg-muted-foreground/60;
+    animation: typingDot 1.4s ease-in-out infinite;
+  }
+
+  .typing-dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  /* Send button animation */
+  .send-button {
+    @apply transition-all duration-150;
+  }
+
+  .send-button:active {
+    transform: scale(0.95);
+  }
+
+  .send-button:hover:not(:disabled) {
+    box-shadow: 0 0 16px hsl(var(--primary) / 0.5);
+  }
+
+  /* Date separator */
+  .date-separator {
+    @apply relative flex items-center justify-center my-4;
+  }
+
+  .date-separator::before,
+  .date-separator::after {
+    content: '';
+    @apply flex-1 h-px bg-border/50;
+  }
+
+  .date-separator span {
+    @apply px-4 text-xs text-muted-foreground bg-background;
+  }
+
+  /* Online status pulse */
+  .online-pulse {
+    @apply relative;
+  }
+
+  .online-pulse::after {
+    content: '';
+    @apply absolute inset-0 rounded-full;
+    animation: onlinePulse 2s ease-in-out infinite;
+  }
+
+  /* Empty state animation */
+  .empty-state-icon {
+    @apply transition-all duration-500;
+    animation: floatIcon 3s ease-in-out infinite;
+  }
+
+  /* Input focus glow */
+  .input-glow:focus {
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.2);
+  }
+
+  /* Avatar ring */
+  .avatar-ring {
+    @apply ring-2 ring-offset-2 ring-offset-background;
+  }
+
+  .avatar-ring-primary {
+    @apply ring-primary;
+  }
+
+  .avatar-ring-online {
+    @apply ring-green-500;
+  }
+}
+
+@keyframes typingDot {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes onlinePulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 hsl(142 70% 45% / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px hsl(142 70% 45% / 0);
+  }
+}
+
+@keyframes floatIcon {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 5px hsl(142 70% 45% / 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px hsl(142 70% 45% / 0.8);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@layer components {
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  /* CRM Kanban Scrollbars */
+  .crm-kanban-scroll {
+    scroll-behavior: smooth;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-track {
+    @apply bg-muted/30 rounded-full;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/20 rounded-full;
+    transition: background 0.2s;
+  }
+
+  .crm-kanban-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/40;
+  }
+
+  /* CRM Stage Column Scrollbar */
+  .crm-stage-scroll {
+    scroll-behavior: smooth;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 10px;
+    transition: background 0.3s;
+  }
+
+  .crm-stage-scroll:hover::-webkit-scrollbar-thumb {
+    @apply bg-muted-foreground/30;
+  }
+
+  .crm-stage-scroll::-webkit-scrollbar-thumb:hover {
+    @apply bg-muted-foreground/50;
+  }
+}
