@@ -136,77 +136,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string, nome: string, whatsapp?: string, cpf?: string, planoId?: string) => {
     try {
-      const redirectUrl = `${window.location.origin}/`;
-      
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl
-        }
-      });
-
-      if (error) throw error;
-
-      let contaId: string | undefined;
-
-      if (data.user) {
-        // Criar conta com whatsapp, cpf e plano
-        const { data: contaData, error: contaError } = await supabase
-          .from('contas')
-          .insert({ 
-            nome: `Conta de ${nome}`,
+      // Chamar Edge Function para criar conta completa
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/signup-completo`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({
+            email,
+            senha: password,
+            nome,
             whatsapp: whatsapp || null,
             cpf: cpf || null,
-            plano_id: planoId || null,
-          })
-          .select()
-          .single();
-
-        if (contaError) throw contaError;
-        contaId = contaData.id;
-
-        // Criar usuário
-        const { error: usuarioError } = await supabase
-          .from('usuarios')
-          .insert({
-            user_id: data.user.id,
-            conta_id: contaData.id,
-            nome,
-            email,
-            is_admin: true
-          });
-
-        if (usuarioError) throw usuarioError;
-
-        // Criar role de admin
-        await supabase.from('user_roles').insert({
-          user_id: data.user.id,
-          role: 'admin'
-        });
-
-        // Criar configuração padrão do Agente IA
-        await supabase.from('agent_ia').insert({ conta_id: contaData.id });
-
-        // Criar funil padrão
-        const { data: funilData } = await supabase
-          .from('funis')
-          .insert({ conta_id: contaData.id, nome: 'Vendas', ordem: 0 })
-          .select()
-          .single();
-
-        if (funilData) {
-          await supabase.from('estagios').insert([
-            { funil_id: funilData.id, nome: 'Novo Lead', ordem: 0, cor: '#3b82f6' },
-            { funil_id: funilData.id, nome: 'Em Contato', ordem: 1, cor: '#f59e0b' },
-            { funil_id: funilData.id, nome: 'Proposta Enviada', ordem: 2, cor: '#8b5cf6' },
-            { funil_id: funilData.id, nome: 'Negociação', ordem: 3, cor: '#ec4899' },
-            { funil_id: funilData.id, nome: 'Fechado', ordem: 4, cor: '#10b981' },
-          ]);
+            planoId: planoId || null,
+          }),
         }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao criar conta');
       }
 
-      return { error: null, contaId };
+      // Após criar a conta via Edge Function, fazer login automaticamente
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        console.error('Erro ao fazer login automático:', signInError);
+        // Não falhar, usuário pode fazer login manualmente
+      }
+
+      return { error: null, contaId: result.contaId };
     } catch (error) {
       return { error: error as Error };
     }
