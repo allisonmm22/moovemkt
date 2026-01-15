@@ -21,11 +21,17 @@ serve(async (req) => {
     console.log('Message ID:', message_id);
     console.log('Type:', message_type);
 
+    // Cliente para banco de dados (Lovable Cloud)
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
-    
     const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    // Cliente para Storage EXTERNO
+    const externalSupabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL')!;
+    const externalSupabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY')!;
+    const externalSupabase = createClient(externalSupabaseUrl, externalSupabaseKey);
+    
+    const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY')!;
 
     // Buscar mídia em base64 da Evolution API
     const mediaResponse = await fetch(
@@ -81,8 +87,8 @@ serve(async (req) => {
     const extension = getExtension(mimeType, message_type);
     const fileName = `${Date.now()}-${message_id}.${extension}`;
 
-    // Upload para o Storage
-    const { data: uploadData, error: uploadError } = await supabase.storage
+    // Upload para o Storage EXTERNO
+    const { data: uploadData, error: uploadError } = await externalSupabase.storage
       .from('whatsapp-media')
       .upload(fileName, bytes, {
         contentType: mimeType,
@@ -97,10 +103,10 @@ serve(async (req) => {
       });
     }
 
-    console.log('Upload realizado:', uploadData.path);
+    console.log('Upload realizado no Storage Externo:', uploadData.path);
 
-    // Obter URL pública
-    const { data: urlData } = supabase.storage
+    // Obter URL pública do Storage Externo
+    const { data: urlData } = externalSupabase.storage
       .from('whatsapp-media')
       .getPublicUrl(fileName);
 

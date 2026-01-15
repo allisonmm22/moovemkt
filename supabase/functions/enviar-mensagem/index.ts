@@ -397,10 +397,15 @@ serve(async (req) => {
     let evolutionUrl: string;
     let body: Record<string, unknown>;
 
-    // Se tem base64, fazer upload para o storage primeiro
+    // Se tem base64, fazer upload para o storage EXTERNO primeiro
     let finalMediaUrl = media_url;
     
     if (media_base64) {
+      // Cliente para Storage EXTERNO
+      const externalSupabaseUrl = Deno.env.get('EXTERNAL_SUPABASE_URL')!;
+      const externalSupabaseKey = Deno.env.get('EXTERNAL_SUPABASE_SERVICE_ROLE_KEY')!;
+      const externalSupabase = createClient(externalSupabaseUrl, externalSupabaseKey);
+      
       // Determinar extensão e mimetype baseado no tipo
       let extension = 'bin';
       let mimeType = 'application/octet-stream';
@@ -425,23 +430,23 @@ serve(async (req) => {
         bytes[i] = binaryString.charCodeAt(i);
       }
       
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await externalSupabase.storage
         .from('whatsapp-media')
         .upload(fileName, bytes, { contentType: mimeType });
       
       if (uploadError) {
-        console.error('Erro ao fazer upload:', uploadError);
+        console.error('Erro ao fazer upload no Storage Externo:', uploadError);
         return new Response(JSON.stringify({ error: 'Erro ao fazer upload', details: uploadError }), {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });
       }
       
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = externalSupabase.storage
         .from('whatsapp-media')
         .getPublicUrl(fileName);
       finalMediaUrl = urlData.publicUrl;
-      console.log('Upload realizado:', finalMediaUrl);
+      console.log('Upload realizado no Storage Externo:', finalMediaUrl);
     }
 
     // Determinar endpoint e body baseado no tipo
