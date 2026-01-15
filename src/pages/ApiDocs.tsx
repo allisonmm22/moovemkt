@@ -732,14 +732,177 @@ const ApiDocs = () => {
           </CardContent>
         </Card>
 
+        {/* Casos de Uso Comuns - Busca por Telefone */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              📱 Casos de Uso Comuns (Busca por Telefone)
+            </CardTitle>
+            <CardDescription>
+              Exemplos prontos para usar em integrações n8n, Make, Zapier
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Buscar Contato por Telefone */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-emerald-500 text-white">GET</Badge>
+                <h4 className="font-medium">Buscar Contato por Telefone</h4>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">URL Completa (copiar):</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">
+                    {baseUrl}/contatos?telefone=5511999999999
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => copiar(`${baseUrl}/contatos?telefone=5511999999999`, 'URL')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">cURL:</p>
+                <CodeBlock 
+                  code={`curl -X GET "${baseUrl}/contatos?telefone=5511999999999" \\
+  -H "Authorization: Bearer SUA_API_KEY" \\
+  -H "Content-Type: application/json"`} 
+                  language="bash" 
+                  label="cURL" 
+                />
+              </div>
+            </div>
+
+            {/* Buscar Negociações por Telefone */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-emerald-500 text-white">GET</Badge>
+                <h4 className="font-medium">Buscar Negociações por Telefone</h4>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">URL Completa (copiar):</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">
+                    {baseUrl}/negociacoes?telefone=5511999999999
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => copiar(`${baseUrl}/negociacoes?telefone=5511999999999`, 'URL')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">cURL:</p>
+                <CodeBlock 
+                  code={`curl -X GET "${baseUrl}/negociacoes?telefone=5511999999999" \\
+  -H "Authorization: Bearer SUA_API_KEY" \\
+  -H "Content-Type: application/json"`} 
+                  language="bash" 
+                  label="cURL" 
+                />
+              </div>
+            </div>
+
+            {/* Criar Negociação com Telefone */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-500 text-white">POST</Badge>
+                <h4 className="font-medium">Criar Negociação usando Telefone</h4>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">URL Completa (copiar):</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">
+                    {baseUrl}/negociacoes
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => copiar(`${baseUrl}/negociacoes`, 'URL')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Body JSON:</p>
+                <CodeBlock 
+                  code={`{
+  "telefone": "5511999999999",
+  "titulo": "Nova Venda",
+  "valor": 2500.00,
+  "notas": "Lead captado via integração"
+}`} 
+                  label="Body" 
+                />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">cURL:</p>
+                <CodeBlock 
+                  code={`curl -X POST "${baseUrl}/negociacoes" \\
+  -H "Authorization: Bearer SUA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"telefone": "5511999999999", "titulo": "Nova Venda", "valor": 2500.00}'`} 
+                  language="bash" 
+                  label="cURL" 
+                />
+              </div>
+            </div>
+
+            {/* Enviar Mensagem por Telefone */}
+            <div className="border rounded-lg p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Badge className="bg-blue-500 text-white">POST</Badge>
+                <h4 className="font-medium">Enviar Mensagem para Telefone</h4>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">URL Completa (copiar):</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">
+                    {baseUrl}/enviar-mensagem
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => copiar(`${baseUrl}/enviar-mensagem`, 'URL')}>
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Body JSON:</p>
+                <CodeBlock 
+                  code={`{
+  "telefone": "5511999999999",
+  "mensagem": "Olá! Sua mensagem automática aqui.",
+  "tipo": "texto"
+}`} 
+                  label="Body" 
+                />
+              </div>
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">cURL:</p>
+                <CodeBlock 
+                  code={`curl -X POST "${baseUrl}/enviar-mensagem" \\
+  -H "Authorization: Bearer SUA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"telefone": "5511999999999", "mensagem": "Olá!", "tipo": "texto"}'`} 
+                  language="bash" 
+                  label="cURL" 
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Exemplo n8n/Make */}
         <Card>
           <CardHeader>
-            <CardTitle>Exemplo de Uso no n8n / Make</CardTitle>
+            <CardTitle>Configuração no n8n / Make / Zapier</CardTitle>
+            <CardDescription>
+              Copie e cole essas configurações nas suas automações
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <Alert>
+              <AlertDescription>
+                💡 <strong>Dica:</strong> Em todas as requisições, substitua <code className="bg-muted px-1 rounded">SUA_API_KEY</code> pela sua chave gerada acima e <code className="bg-muted px-1 rounded">5511999999999</code> pelo telefone real.
+              </AlertDescription>
+            </Alert>
+
             <div>
-              <h4 className="font-medium mb-2">1. Configure o HTTP Request (GET)</h4>
+              <h4 className="font-medium mb-2">🔍 Buscar Contato por Telefone (GET)</h4>
               <CodeBlock code={`URL: ${baseUrl}/contatos?telefone=5511999999999
 Method: GET
 Headers:
@@ -748,7 +911,32 @@ Headers:
             </div>
 
             <div>
-              <h4 className="font-medium mb-2">2. Para enviar dados (POST)</h4>
+              <h4 className="font-medium mb-2">🔍 Buscar Negociações por Telefone (GET)</h4>
+              <CodeBlock code={`URL: ${baseUrl}/negociacoes?telefone=5511999999999
+Method: GET
+Headers:
+  Authorization: Bearer mk_sua_api_key_aqui
+  Content-Type: application/json`} language="plaintext" label="Configuração" />
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">📝 Criar Negociação com Telefone (POST)</h4>
+              <CodeBlock code={`URL: ${baseUrl}/negociacoes
+Method: POST
+Headers:
+  Authorization: Bearer mk_sua_api_key_aqui
+  Content-Type: application/json
+Body:
+{
+  "telefone": "5511999999999",
+  "titulo": "Nova Venda",
+  "valor": 2500.00,
+  "notas": "Lead captado via n8n"
+}`} language="plaintext" label="Configuração" />
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">💬 Enviar Mensagem (POST)</h4>
               <CodeBlock code={`URL: ${baseUrl}/enviar-mensagem
 Method: POST
 Headers:
@@ -762,7 +950,7 @@ Body:
             </div>
 
             <div>
-              <h4 className="font-medium mb-2">3. Para atualizar negociação (PATCH)</h4>
+              <h4 className="font-medium mb-2">✏️ Atualizar Negociação (PATCH)</h4>
               <CodeBlock code={`URL: ${baseUrl}/negociacoes/UUID_DA_NEGOCIACAO
 Method: PATCH
 Headers:
