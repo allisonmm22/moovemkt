@@ -18,7 +18,7 @@ export function MobileHeader({ onMenuClick }: MobileHeaderProps) {
         >
           <Menu className="h-5 w-5" />
         </Button>
-        <span className="font-semibold text-lg text-foreground">ZapCRM</span>
+        <span className="font-semibold text-lg text-foreground">Moove CRM</span>
       </div>
       
       <div className="flex items-center gap-2">

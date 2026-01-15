@@ -89,7 +89,7 @@ export function MobileSidebar({ open, onOpenChange }: MobileSidebarProps) {
         <SheetHeader className="p-4 border-b border-sidebar-border">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-sidebar-foreground font-bold text-xl">
-              ZapCRM
+              Moove CRM
             </SheetTitle>
           </div>
         </SheetHeader>
