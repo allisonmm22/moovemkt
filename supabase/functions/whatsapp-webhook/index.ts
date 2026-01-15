@@ -52,6 +52,47 @@ async function fetchProfilePicture(
   }
 }
 
+// Função para buscar nome e foto do contato individual
+async function fetchContactProfile(
+  instanceName: string,
+  telefone: string,
+  evolutionApiKey: string
+): Promise<{ name: string | null; pictureUrl: string | null }> {
+  try {
+    console.log('Buscando perfil do contato:', telefone);
+    
+    const response = await fetch(
+      `${EVOLUTION_API_URL}/chat/fetchProfile/${instanceName}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': evolutionApiKey,
+        },
+        body: JSON.stringify({
+          number: telefone,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      console.log('Não foi possível buscar perfil:', response.status);
+      return { name: null, pictureUrl: null };
+    }
+
+    const data = await response.json();
+    const name = data.name || data.pushName || data.notify || null;
+    const pictureUrl = data.profilePictureUrl || data.picture || data.url || null;
+    
+    console.log('Perfil encontrado:', { name, pictureUrl: pictureUrl ? 'sim' : 'não' });
+    
+    return { name, pictureUrl };
+  } catch (error) {
+    console.error('Erro ao buscar perfil do contato:', error);
+    return { name: null, pictureUrl: null };
+  }
+}
+
 // Função para buscar foto e info do grupo
 async function fetchGroupInfo(
   instanceName: string,
@@ -902,7 +943,7 @@ serve(async (req) => {
         console.log('Criando novo contato/grupo...');
         
         let avatarUrl: string | null = null;
-        let nomeContato = pushName || telefone;
+        let nomeContato = telefone; // Usar telefone como fallback inicial
         
         if (isGrupo && conexaoCompleta?.token && grupoJid) {
           // Buscar info do grupo (foto + nome)
@@ -910,8 +951,24 @@ serve(async (req) => {
           avatarUrl = groupInfo.pictureUrl;
           nomeContato = groupInfo.subject || pushName || `Grupo ${telefone}`;
         } else if (!isGrupo && conexaoCompleta?.token) {
-          // Buscar foto de perfil para contato individual
-          avatarUrl = await fetchProfilePicture(instance, telefone, conexaoCompleta.token);
+          // Para contatos individuais, buscar perfil completo (nome + foto)
+          const profile = await fetchContactProfile(instance, telefone, conexaoCompleta.token);
+          avatarUrl = profile.pictureUrl;
+          
+          // Se NÃO é mensagem enviada por mim, usar pushName
+          // Se É mensagem enviada por mim, usar nome do perfil buscado (pushName é MEU nome)
+          if (fromMe) {
+            // Mensagem enviada: pushName é MEU nome, então usar nome do perfil do contato
+            nomeContato = profile.name || telefone;
+            console.log('Mensagem enviada (fromMe): usando nome do perfil:', nomeContato);
+          } else {
+            // Mensagem recebida: pushName é o nome do remetente (correto)
+            nomeContato = pushName || profile.name || telefone;
+            console.log('Mensagem recebida: usando pushName:', nomeContato);
+          }
+        } else {
+          // Sem token, usar pushName apenas se não for fromMe
+          nomeContato = fromMe ? telefone : (pushName || telefone);
         }
         
         // Preparar metadata com dados de anúncio se existirem
