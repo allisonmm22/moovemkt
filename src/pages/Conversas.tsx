@@ -2288,9 +2288,12 @@ export default function Conversas() {
                       conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
                     )} />
                   </div>
-                  <div className="hidden sm:block">
+                  <div className={cn(isMobile ? "max-w-[100px]" : "")}>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                      <span className={cn(
+                        "font-semibold text-foreground group-hover:text-primary transition-colors",
+                        isMobile && "text-sm truncate max-w-[90px]"
+                      )}>
                         {conversaSelecionada.contatos.nome}
                       </span>
                       {!isMobile && conversaSelecionada.contatos.is_grupo && (
@@ -2309,9 +2312,11 @@ export default function Conversas() {
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-muted-foreground">
-                      {conversaSelecionada.contatos.telefone}
-                    </p>
+                    {!isMobile && (
+                      <p className="text-sm text-muted-foreground">
+                        {conversaSelecionada.contatos.telefone}
+                      </p>
+                    )}
                   </div>
                 </button>
               </div>
@@ -2389,7 +2394,8 @@ export default function Conversas() {
                     <button
                       onClick={toggleAgenteIA}
                       className={cn(
-                        'flex items-center gap-1 md:gap-2 px-2 md:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                        'flex items-center rounded-xl text-sm font-medium transition-all duration-200',
+                        isMobile ? 'p-1.5 gap-1' : 'gap-2 px-4 py-2',
                         conversaSelecionada.agente_ia_ativo
                           ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
                           : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
@@ -2397,7 +2403,7 @@ export default function Conversas() {
                     >
                       {conversaSelecionada.agente_ia_ativo ? (
                         <>
-                          <Bot className="h-4 w-4" />
+                          <Bot className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
                           <span className="hidden md:flex items-center gap-1.5">
                             {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
                             {conversaSelecionada.etapa_ia && (
@@ -2412,7 +2418,7 @@ export default function Conversas() {
                         </>
                       ) : (
                         <>
-                          <User className="h-4 w-4" />
+                          <User className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
                           <span className="hidden md:inline">Humano</span>
                         </>
                       )}
@@ -2426,9 +2432,12 @@ export default function Conversas() {
                         <TooltipTrigger asChild>
                           <button
                             onClick={() => setShowTransferModal(true)}
-                            className="p-2 rounded-xl bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                            className={cn(
+                              "rounded-xl bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200",
+                              isMobile ? "p-1.5" : "p-2"
+                            )}
                           >
-                            <ArrowRightLeft className="h-4 w-4" />
+                            <ArrowRightLeft className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>Transferir</TooltipContent>
@@ -2442,9 +2451,12 @@ export default function Conversas() {
                       <TooltipTrigger asChild>
                         <button
                           onClick={encerrarAtendimento}
-                          className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200"
+                          className={cn(
+                            "rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200",
+                            isMobile ? "p-1.5" : "p-2"
+                          )}
                         >
-                          <XCircle className="h-4 w-4" />
+                          <XCircle className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>Encerrar</TooltipContent>
@@ -2494,14 +2506,14 @@ export default function Conversas() {
                   </button>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
+                <div className={cn("flex items-center", isMobile ? "gap-1.5" : "gap-3")}>
                   <div className="relative" ref={attachMenuRef}>
                     <button 
                       onClick={() => setShowAttachMenu(!showAttachMenu)}
-                      className={cn("rounded-xl hover:bg-muted transition-all duration-200", isMobile ? "p-2" : "p-2.5")}
+                      className={cn("rounded-xl hover:bg-muted transition-all duration-200", isMobile ? "p-1.5" : "p-2.5")}
                       disabled={uploading}
                     >
-                      <Paperclip className={cn("h-5 w-5 text-muted-foreground transition-colors hover:text-foreground", uploading && "animate-pulse text-primary")} />
+                      <Paperclip className={cn(isMobile ? "h-4 w-4" : "h-5 w-5", "text-muted-foreground transition-colors hover:text-foreground", uploading && "animate-pulse text-primary")} />
                     </button>
                     
                     {showAttachMenu && (
@@ -2582,15 +2594,15 @@ export default function Conversas() {
                     onClick={enviarMensagem}
                     disabled={!novaMensagem.trim() || enviando}
                     className={cn(
-                      "rounded-xl bg-primary text-primary-foreground flex items-center justify-center transition-all duration-200 disabled:opacity-50 send-button",
-                      isMobile ? "h-10 w-10" : "h-11 w-11",
+                      "rounded-xl bg-primary text-primary-foreground flex items-center justify-center transition-all duration-200 disabled:opacity-50 send-button shrink-0",
+                      isMobile ? "h-9 w-9" : "h-11 w-11",
                       novaMensagem.trim() && !enviando && "shadow-[0_0_20px_hsl(var(--primary)/0.4)] hover:shadow-[0_0_24px_hsl(var(--primary)/0.5)]"
                     )}
                   >
                     {enviando ? (
-                      <div className="h-4 w-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                      <div className={cn(isMobile ? "h-3.5 w-3.5" : "h-4 w-4", "border-2 border-primary-foreground border-t-transparent rounded-full animate-spin")} />
                     ) : (
-                      <Send className="h-5 w-5" />
+                      <Send className={cn(isMobile ? "h-4 w-4" : "h-5 w-5")} />
                     )}
                   </button>
                 </div>
