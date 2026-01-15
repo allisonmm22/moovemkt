@@ -976,6 +976,19 @@ serve(async (req) => {
           console.log('❌ [CAMPO] Erro ao buscar campo:', campoQueryError);
         }
         
+        // Função para normalizar nomes removendo preposições/artigos para comparação
+        const normalizarParaComparacao = (texto: string): string => {
+          return texto
+            .toLowerCase()
+            .replace(/-/g, ' ')
+            .replace(/[.,;!?]+$/, '')
+            // Remover preposições e artigos comuns do português
+            .replace(/\b(de|do|da|dos|das|o|a|os|as|um|uma|uns|umas|em|no|na|nos|nas|para|por|com|ao|aos|à|às)\b/g, ' ')
+            // Remover espaços extras
+            .replace(/\s+/g, ' ')
+            .trim();
+        };
+
         if (!campo) {
           // Tentar busca mais flexível (contains)
           console.log(`🔍 [CAMPO] Busca exata falhou, tentando busca parcial...`);
@@ -985,10 +998,34 @@ serve(async (req) => {
             .eq('conta_id', conta_id);
           
           const campoEncontrado = camposParcial?.find(c => {
-            const nomeNorm = c.nome.toLowerCase().replace(/-/g, ' ').replace(/[.,;!?]+$/, '').trim();
-            return nomeNorm === nomeCampo || 
-                   nomeNorm.includes(nomeCampo) || 
-                   nomeCampo.includes(nomeNorm);
+            const nomeNorm = normalizarParaComparacao(c.nome);
+            const buscaNorm = normalizarParaComparacao(nomeCampo);
+            
+            console.log(`🔍 [CAMPO] Comparando: "${c.nome}" (norm: "${nomeNorm}") vs "${nomeCampo}" (norm: "${buscaNorm}")`);
+            
+            // Comparação exata após normalização (sem preposições)
+            if (nomeNorm === buscaNorm) {
+              console.log(`✅ [CAMPO] Match exato normalizado!`);
+              return true;
+            }
+            
+            // Verificar se todas as palavras significativas da busca estão no nome do campo
+            const palavrasBusca = buscaNorm.split(' ').filter(p => p.length > 2);
+            const palavrasNome = nomeNorm.split(' ').filter(p => p.length > 2);
+            
+            const todasPalavrasPresentes = palavrasBusca.length > 0 && palavrasBusca.every(palavraBusca =>
+              palavrasNome.some(palavraNome => 
+                palavraNome.includes(palavraBusca) || palavraBusca.includes(palavraNome)
+              )
+            );
+            
+            if (todasPalavrasPresentes) {
+              console.log(`✅ [CAMPO] Match por palavras-chave!`);
+              return true;
+            }
+            
+            // Fallback: busca por substring (método antigo)
+            return nomeNorm.includes(buscaNorm) || buscaNorm.includes(nomeNorm);
           });
           
           if (!campoEncontrado) {
