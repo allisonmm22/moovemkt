@@ -17,8 +17,8 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
-        name: "ZapCRM - CRM com WhatsApp",
-        short_name: "ZapCRM",
+        name: "Moove CRM - CRM com WhatsApp",
+        short_name: "Moove CRM",
         description: "Sistema CRM completo com integração WhatsApp",
         theme_color: "#10B981",
         background_color: "#0F172A",

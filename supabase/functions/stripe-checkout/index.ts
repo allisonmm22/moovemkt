@@ -114,7 +114,7 @@ serve(async (req) => {
     
     // Criar produto e preço dinâmicos
     const product = await stripe.products.create({
-      name: `${plano.nome} - ZapCRM`,
+      name: `${plano.nome} - Moove CRM`,
       description: plano.descricao || `Plano ${plano.nome}`,
       metadata: {
         plano_id: plano_id,

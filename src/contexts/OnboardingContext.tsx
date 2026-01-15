@@ -26,7 +26,7 @@ interface OnboardingContextType {
 
 const OnboardingContext = createContext<OnboardingContextType | undefined>(undefined);
 
-const ONBOARDING_STORAGE_KEY = 'zapcrm_onboarding_state';
+const ONBOARDING_STORAGE_KEY = 'moovecrm_onboarding_state';
 
 const STEP_ORDER: OnboardingStep[] = [
   'escolha_conexao',

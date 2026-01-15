@@ -202,7 +202,7 @@ export default function Auth() {
               <MessageSquare className="w-8 h-8 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-4xl font-bold text-foreground">ZapCRM</h1>
+              <h1 className="text-4xl font-bold text-foreground">Moove CRM</h1>
               <p className="text-muted-foreground">CRM com WhatsApp</p>
             </div>
           </div>
@@ -249,7 +249,7 @@ export default function Auth() {
             <div className="w-12 h-12 bg-gradient-to-br from-primary to-emerald-400 rounded-xl flex items-center justify-center">
               <MessageSquare className="w-6 h-6 text-primary-foreground" />
             </div>
-            <span className="text-2xl font-bold text-foreground">ZapCRM</span>
+            <span className="text-2xl font-bold text-foreground">Moove CRM</span>
           </div>
 
           {isLogin ? (
