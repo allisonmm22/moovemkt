@@ -1727,7 +1727,7 @@ export default function Conversas() {
   return (
     <MainLayout>
       <div className={cn(
-        "flex bg-card animate-fade-in",
+        "flex bg-card animate-fade-in w-full min-w-0",
         isMobile 
           ? "h-[calc(100dvh-7.5rem)] overflow-x-hidden" 
           : "h-[calc(100vh-3rem)] rounded-xl border border-border overflow-hidden"
@@ -2244,13 +2244,13 @@ export default function Conversas() {
         {/* Área da Conversa */}
         {conversaSelecionada ? (
           <div className={cn(
-            "flex-1 flex flex-col animate-slide-in-left bg-gradient-to-b from-background to-card/30",
+            "flex-1 flex flex-col animate-slide-in-left bg-gradient-to-b from-background to-card/30 min-w-0",
             isMobile && mobileView === 'lista' && "hidden"
           )}>
             {/* Header da Conversa */}
             <div className={cn(
               "flex items-center border-b border-border bg-card/80 backdrop-blur-sm",
-              isMobile ? "p-2 px-2 gap-1" : "p-4 justify-between"
+              isMobile ? "py-2 pl-[calc(0.5rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] gap-1" : "p-4 justify-between"
             )}>
               {isMobile ? (
                 // Mobile: layout compacto em linha única
@@ -2555,7 +2555,7 @@ export default function Conversas() {
             {/* Mensagens */}
             <div className={cn(
               "flex-1 overflow-y-auto overflow-x-hidden space-y-3", 
-              isMobile ? "p-2 px-3 pb-4" : "p-4"
+              isMobile ? "py-2 pb-4 pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))]" : "p-4"
             )}>
               {mensagens.map((msg, index) => renderMensagem(msg, index))}
               <div ref={messagesEndRef} />
@@ -2564,7 +2564,7 @@ export default function Conversas() {
             {/* Input */}
             <div className={cn(
               "border-t border-border bg-card/80 backdrop-blur-sm shrink-0", 
-              isMobile ? "p-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : "p-4"
+              isMobile ? "py-2 pl-[calc(0.75rem+env(safe-area-inset-left))] pr-[calc(0.75rem+env(safe-area-inset-right))] pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : "p-4"
             )}>
               {conversaEncerrada ? (
                 <div className="flex items-center justify-between glass rounded-xl p-4">
