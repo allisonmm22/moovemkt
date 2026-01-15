@@ -713,9 +713,14 @@ async function callOpenAI(
               content: JSON.stringify(resultado),
             });
           } else {
+            // Instruir a IA a NÃO mencionar a ação na resposta ao cliente
             toolResults.push({
               tool_call_id: toolCall.id,
-              content: JSON.stringify({ sucesso: true, mensagem: 'Ação será executada automaticamente' }),
+              content: JSON.stringify({ 
+                sucesso: true, 
+                mensagem: 'Ação executada internamente.',
+                instrucao: 'IMPORTANTE: Esta ação foi processada silenciosamente. NÃO mencione esta ação na sua resposta ao cliente. NÃO diga "campo atualizado", "informação salva" ou similar. Continue a conversa naturalmente, avançando para o próximo passo ou fazendo a próxima pergunta.',
+              }),
             });
           }
         } catch (e) {
@@ -1380,6 +1385,16 @@ serve(async (req) => {
       promptCompleto += '- As ações são executadas silenciosamente em background. Mantenha o fluxo natural da conversa.\n';
       promptCompleto += '- Quando transferir para outro agente, apenas se despeça naturalmente sem mencionar a transferência.\n';
       
+      promptCompleto += '\n## ⚠️ REGRA CRÍTICA: AÇÕES SÃO SILENCIOSAS\n';
+      promptCompleto += 'Quando você executa uma ação (como @campo, @tag, @etapa, @nome), a ação é processada INTERNAMENTE.\n';
+      promptCompleto += '- **NUNCA** responda com mensagens como "📝 Campo X atualizado para Y"\n';
+      promptCompleto += '- **NUNCA** diga "Informação salva", "Registrado", "Campo atualizado"\n';
+      promptCompleto += '- **NUNCA** confirme a execução de ações internas ao cliente\n';
+      promptCompleto += '- Sua resposta deve ser uma MENSAGEM DE CONVERSA NATURAL\n';
+      promptCompleto += '- Após salvar um campo, faça a próxima pergunta ou agradeça e continue normalmente\n';
+      promptCompleto += '- Exemplo correto: "Obrigado! E qual é a sua data de nascimento?" (não menciona que salvou email)\n';
+      promptCompleto += '- Exemplo ERRADO: "📝 Campo email atualizado para x@y.com" (NUNCA faça isso!)\n';
+      
       promptCompleto += '\n## ⚠️ REGRA CRÍTICA: UMA AÇÃO POR RESPOSTA\n';
       promptCompleto += 'Você deve executar NO MÁXIMO UMA ou DUAS ações por resposta!\n\n';
       promptCompleto += '**PROIBIDO:**\n';
@@ -1676,6 +1691,26 @@ serve(async (req) => {
     
     // Remover menções de transferência que possam ter escapado
     respostaFinal = respostaFinal.replace(/estou transferindo.*?(humano|agente|atendente).*?\./gi, '').trim();
+    
+    // Remover mensagens de sistema que a IA possa ter gerado (confirmações de ações)
+    respostaFinal = respostaFinal.replace(/^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)\s*Campo\s*"[^"]+"\s*atualizado\s*(para\s*)?"[^"]+"\s*\.?\s*/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)\s*Campo\s+\S+\s*atualizado\s*(para\s*)?\S+\s*\.?\s*/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^Ação\s*(será\s*)?(executada|registrada)\s*(automaticamente|internamente)?\.?\s*/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^Informação\s*(salva|registrada|atualizada)\.?\s*/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^(Registro|Dados?)\s*(salvos?|atualizados?|registrados?)\.?\s*/gi, '').trim();
+    
+    // Detectar se a resposta inteira é uma mensagem de sistema e gerar fallback
+    const ehApenasMensagemSistema = /^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)/.test(result.resposta) &&
+                                    (result.resposta.includes('atualizado para') ||
+                                     result.resposta.includes('atualizado:') ||
+                                     result.resposta.includes('Campo "') ||
+                                     result.resposta.includes('executada'));
+    
+    if (ehApenasMensagemSistema || respostaFinal.length < 10) {
+      console.log('⚠️ [VALIDAÇÃO] Resposta parece ser mensagem de sistema, gerando fallback...');
+      console.log('Resposta original:', result.resposta);
+      respostaFinal = 'Perfeito! Posso ajudar com mais alguma coisa?';
+    }
 
     // VALIDAÇÃO FINAL: Detectar se a IA inventou um agendamento sem chamar a ferramenta
     const temAcaoAgendaCriar = result.acoes?.some(a => a.tipo === 'agenda' && a.valor?.startsWith('criar:'));
