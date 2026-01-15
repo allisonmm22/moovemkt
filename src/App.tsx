@@ -25,6 +25,7 @@ import Configuracoes from "./pages/Configuracoes";
 import RelatorioAnuncios from "./pages/RelatorioAnuncios";
 import NotFound from "./pages/NotFound";
 import CamposPersonalizados from "./pages/CamposPersonalizados";
+import ApiDocs from "./pages/ApiDocs";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminContas from "./pages/admin/AdminContas";
 import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
@@ -262,6 +263,14 @@ function AppRoutes() {
             !user ? <Navigate to="/auth" replace /> :
             usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
             <Perfil />
+          } 
+        />
+        <Route 
+          path="/api-docs" 
+          element={
+            !user ? <Navigate to="/auth" replace /> :
+            usuario?.isSuperAdmin ? <Navigate to="/admin" replace /> :
+            <ApiDocs />
           } 
         />
         <Route path="*" element={<NotFound />} />

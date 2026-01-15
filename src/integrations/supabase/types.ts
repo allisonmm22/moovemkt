@@ -371,6 +371,47 @@ export type Database = {
           },
         ]
       }
+      api_keys: {
+        Row: {
+          ativo: boolean | null
+          conta_id: string
+          created_at: string | null
+          id: string
+          key: string
+          nome: string
+          ultimo_uso: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          conta_id: string
+          created_at?: string | null
+          id?: string
+          key: string
+          nome?: string
+          ultimo_uso?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          conta_id?: string
+          created_at?: string | null
+          id?: string
+          key?: string
+          nome?: string
+          ultimo_uso?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       atendente_config: {
         Row: {
           created_at: string | null
