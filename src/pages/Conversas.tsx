@@ -46,6 +46,7 @@ import {
   Megaphone,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { storageClient } from '@/integrations/supabase/storageClient';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -1042,16 +1043,16 @@ export default function Conversas() {
         const base64Full = reader.result as string;
         const base64Data = base64Full.split(',')[1];
         
-        // Upload para o storage
+        // Upload para o storage EXTERNO
         const fileName = `${Date.now()}-${file.name}`;
-        const { error: uploadError } = await supabase.storage
+        const { error: uploadError } = await storageClient.storage
           .from('whatsapp-media')
           .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
-        // Obter URL pública
-        const { data: urlData } = supabase.storage
+        // Obter URL pública do Storage Externo
+        const { data: urlData } = storageClient.storage
           .from('whatsapp-media')
           .getPublicUrl(fileName);
 
@@ -1147,16 +1148,16 @@ export default function Conversas() {
       }
       const blob = new Blob([bytes], { type: mimeType });
       
-      // Upload para o storage
+      // Upload para o storage EXTERNO
       const fileName = `${Date.now()}-audio.${extension}`;
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await storageClient.storage
         .from('whatsapp-media')
         .upload(fileName, blob, { contentType: mimeType });
 
       if (uploadError) throw uploadError;
 
-      // Obter URL pública
-      const { data: urlData } = supabase.storage
+      // Obter URL pública do Storage Externo
+      const { data: urlData } = storageClient.storage
         .from('whatsapp-media')
         .getPublicUrl(fileName);
 
