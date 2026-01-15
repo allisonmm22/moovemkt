@@ -913,7 +913,7 @@ export default function Conversas() {
           status: 'encerrado', 
           arquivada: false,
           agente_ia_ativo: false,
-          memoria_limpa_em: new Date(Date.now() + 5000).toISOString()
+          memoria_limpa_em: new Date().toISOString()
         })
         .eq('id', conversaSelecionada.id);
 
