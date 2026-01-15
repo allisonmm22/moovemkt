@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
-import { Copy, Key, Plus, Trash2, Eye, EyeOff, RefreshCw, Code, Send, Users, Briefcase, Workflow, Link2 } from 'lucide-react';
+import { Copy, Key, Plus, Trash2, Eye, EyeOff, RefreshCw, Code, Send, Users, Briefcase, Workflow, Link2, Terminal } from 'lucide-react';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -20,6 +20,14 @@ interface ApiKey {
   ativo: boolean;
   ultimo_uso: string | null;
   created_at: string;
+}
+
+interface ParamDef {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+  example?: string;
 }
 
 const ApiDocs = () => {
@@ -60,7 +68,6 @@ const ApiDocs = () => {
     
     setGerando(true);
     try {
-      // Gerar key aleatória
       const array = new Uint8Array(32);
       crypto.getRandomValues(array);
       const key = 'mk_' + Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
@@ -122,16 +129,16 @@ const ApiDocs = () => {
     setShowKeys(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const CodeBlock = ({ code, language = 'json' }: { code: string; language?: string }) => (
+  const CodeBlock = ({ code, language = 'json', label = 'Código' }: { code: string; language?: string; label?: string }) => (
     <div className="relative">
-      <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto">
+      <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto whitespace-pre-wrap break-all">
         <code className={`language-${language}`}>{code}</code>
       </pre>
       <Button
         variant="ghost"
         size="sm"
         className="absolute top-2 right-2"
-        onClick={() => copiar(code, 'Código')}
+        onClick={() => copiar(code, label)}
       >
         <Copy className="h-4 w-4" />
       </Button>
@@ -149,7 +156,7 @@ const ApiDocs = () => {
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
     path: string;
     description: string;
-    params?: { name: string; type: string; required: boolean; description: string }[];
+    params?: ParamDef[];
     requestExample?: string;
     responseExample: string;
   }) => {
@@ -158,6 +165,25 @@ const ApiDocs = () => {
       POST: 'bg-blue-500',
       PATCH: 'bg-amber-500',
       DELETE: 'bg-red-500'
+    };
+
+    const fullUrl = `${baseUrl}${path}`;
+
+    // Gerar cURL automaticamente
+    const generateCurl = () => {
+      const curlBase = `curl -X ${method} "${fullUrl}"`;
+      const headers = ` \\
+  -H "Authorization: Bearer SUA_API_KEY" \\
+  -H "Content-Type: application/json"`;
+      
+      if (method === 'GET') {
+        return curlBase + headers;
+      } else if (requestExample) {
+        const cleanedRequest = requestExample.replace(/\n/g, '').replace(/\s+/g, ' ').trim();
+        return curlBase + headers + ` \\
+  -d '${cleanedRequest}'`;
+      }
+      return curlBase + headers;
     };
 
     return (
@@ -171,9 +197,34 @@ const ApiDocs = () => {
         <AccordionContent className="space-y-4 pt-4">
           <p className="text-muted-foreground">{description}</p>
           
+          {/* URL Completa */}
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Link2 className="h-4 w-4" />
+              URL Completa
+            </h4>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">{fullUrl}</code>
+              <Button variant="outline" size="sm" onClick={() => copiar(fullUrl, 'URL')}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Headers Obrigatórios */}
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              🔑 Headers Obrigatórios
+            </h4>
+            <div className="bg-muted p-3 rounded-lg space-y-1 text-sm font-mono">
+              <div><span className="text-primary">Authorization:</span> Bearer SUA_API_KEY</div>
+              <div><span className="text-primary">Content-Type:</span> application/json</div>
+            </div>
+          </div>
+          
           {params && params.length > 0 && (
             <div>
-              <h4 className="font-medium mb-2">Parâmetros</h4>
+              <h4 className="font-medium mb-2">📋 Parâmetros</h4>
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted">
@@ -182,6 +233,7 @@ const ApiDocs = () => {
                       <th className="text-left p-2">Tipo</th>
                       <th className="text-left p-2">Obrigatório</th>
                       <th className="text-left p-2">Descrição</th>
+                      <th className="text-left p-2">Exemplo</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -191,6 +243,7 @@ const ApiDocs = () => {
                         <td className="p-2 text-muted-foreground">{param.type}</td>
                         <td className="p-2">{param.required ? <Badge variant="destructive" className="text-xs">Sim</Badge> : <Badge variant="secondary" className="text-xs">Não</Badge>}</td>
                         <td className="p-2 text-muted-foreground">{param.description}</td>
+                        <td className="p-2 font-mono text-xs text-muted-foreground">{param.example || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -201,14 +254,23 @@ const ApiDocs = () => {
 
           {requestExample && (
             <div>
-              <h4 className="font-medium mb-2">Exemplo de Request</h4>
-              <CodeBlock code={requestExample} />
+              <h4 className="font-medium mb-2">📤 Exemplo de Request (Body)</h4>
+              <CodeBlock code={requestExample} label="Request" />
             </div>
           )}
 
           <div>
-            <h4 className="font-medium mb-2">Exemplo de Response</h4>
-            <CodeBlock code={responseExample} />
+            <h4 className="font-medium mb-2">📥 Exemplo de Response</h4>
+            <CodeBlock code={responseExample} label="Response" />
+          </div>
+
+          {/* cURL */}
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Terminal className="h-4 w-4" />
+              cURL (copiar e colar no terminal)
+            </h4>
+            <CodeBlock code={generateCurl()} language="bash" label="cURL" />
           </div>
         </AccordionContent>
       </AccordionItem>
@@ -238,7 +300,6 @@ const ApiDocs = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Gerar nova key */}
             <div className="flex gap-2">
               <Input
                 placeholder="Nome da API Key (opcional)"
@@ -252,7 +313,6 @@ const ApiDocs = () => {
               </Button>
             </div>
 
-            {/* Lista de keys */}
             {loading ? (
               <div className="text-center py-4 text-muted-foreground">Carregando...</div>
             ) : apiKeys.length === 0 ? (
@@ -307,7 +367,7 @@ const ApiDocs = () => {
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono">{baseUrl}</code>
+              <code className="flex-1 bg-muted p-3 rounded-lg text-sm font-mono break-all">{baseUrl}</code>
               <Button variant="outline" onClick={() => copiar(baseUrl, 'URL')}>
                 <Copy className="h-4 w-4" />
               </Button>
@@ -348,6 +408,7 @@ const ApiDocs = () => {
               </TabsList>
 
               <ScrollArea className="h-[600px] mt-4">
+                {/* TAB: Mensagens */}
                 <TabsContent value="mensagens" className="mt-0">
                   <Accordion type="single" collapsible>
                     <EndpointDoc
@@ -355,11 +416,11 @@ const ApiDocs = () => {
                       path="/enviar-mensagem"
                       description="Envia uma mensagem de texto ou mídia via WhatsApp"
                       params={[
-                        { name: 'telefone', type: 'string', required: true, description: 'Número do destinatário (ex: 5511999999999)' },
-                        { name: 'mensagem', type: 'string', required: true, description: 'Conteúdo da mensagem' },
-                        { name: 'tipo', type: 'string', required: false, description: 'Tipo: texto, imagem, audio, video, documento' },
-                        { name: 'media_url', type: 'string', required: false, description: 'URL da mídia (se tipo != texto)' },
-                        { name: 'conexao_id', type: 'string', required: false, description: 'ID da conexão (usa a primeira ativa se não informado)' },
+                        { name: 'telefone', type: 'string', required: true, description: 'Número do destinatário com DDD e código do país', example: '5511999999999' },
+                        { name: 'mensagem', type: 'string', required: true, description: 'Conteúdo da mensagem', example: 'Olá! Como posso ajudar?' },
+                        { name: 'tipo', type: 'string', required: false, description: 'Tipo: texto, imagem, audio, video, documento', example: 'texto' },
+                        { name: 'media_url', type: 'string', required: false, description: 'URL da mídia (se tipo != texto)', example: 'https://exemplo.com/imagem.jpg' },
+                        { name: 'conexao_id', type: 'string', required: false, description: 'ID da conexão (usa a primeira ativa se não informado)', example: 'uuid-da-conexao' },
                       ]}
                       requestExample={`{
   "telefone": "5511999999999",
@@ -369,7 +430,7 @@ const ApiDocs = () => {
                       responseExample={`{
   "success": true,
   "data": {
-    "message_id": "ABCD1234..."
+    "message_id": "ABCD1234567890"
   }
 }`}
                     />
@@ -382,7 +443,7 @@ const ApiDocs = () => {
   "success": true,
   "data": [
     {
-      "id": "uuid-da-conexao",
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "nome": "WhatsApp Principal",
       "numero": "5511999999999",
       "status": "conectado",
@@ -395,27 +456,28 @@ const ApiDocs = () => {
                   </Accordion>
                 </TabsContent>
 
+                {/* TAB: Contatos */}
                 <TabsContent value="contatos" className="mt-0">
                   <Accordion type="single" collapsible>
                     <EndpointDoc
                       method="GET"
                       path="/contatos"
-                      description="Busca contatos. Use o parâmetro telefone para filtrar."
+                      description="Busca contatos. Use o parâmetro telefone para filtrar por número."
                       params={[
-                        { name: 'telefone', type: 'string', required: false, description: 'Filtra por número de telefone' },
+                        { name: 'telefone', type: 'string', required: false, description: 'Filtra por número de telefone', example: '5511999999999' },
                       ]}
                       responseExample={`{
   "success": true,
   "data": [
     {
-      "id": "uuid-do-contato",
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "nome": "João Silva",
       "telefone": "5511999999999",
       "email": "joao@email.com",
       "tags": ["lead", "instagram"],
       "avatar_url": null,
       "canal": "whatsapp",
-      "created_at": "2024-01-15T10:30:00Z"
+      "created_at": "2026-01-15T10:30:00Z"
     }
   ]
 }`}
@@ -426,10 +488,10 @@ const ApiDocs = () => {
                       path="/contatos"
                       description="Cria um novo contato"
                       params={[
-                        { name: 'nome', type: 'string', required: true, description: 'Nome do contato' },
-                        { name: 'telefone', type: 'string', required: true, description: 'Número de telefone' },
-                        { name: 'email', type: 'string', required: false, description: 'E-mail do contato' },
-                        { name: 'tags', type: 'string[]', required: false, description: 'Lista de tags' },
+                        { name: 'nome', type: 'string', required: true, description: 'Nome do contato', example: 'João Silva' },
+                        { name: 'telefone', type: 'string', required: true, description: 'Número de telefone com DDD', example: '5511999999999' },
+                        { name: 'email', type: 'string', required: false, description: 'E-mail do contato', example: 'joao@email.com' },
+                        { name: 'tags', type: 'string[]', required: false, description: 'Lista de tags', example: '["lead", "instagram"]' },
                       ]}
                       requestExample={`{
   "nome": "João Silva",
@@ -440,41 +502,44 @@ const ApiDocs = () => {
                       responseExample={`{
   "success": true,
   "data": {
-    "id": "uuid-do-contato",
+    "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
     "nome": "João Silva",
     "telefone": "5511999999999",
     "email": "joao@email.com",
-    "tags": ["lead", "instagram"]
+    "tags": ["lead", "instagram"],
+    "created_at": "2026-01-15T14:30:00Z"
   }
 }`}
                     />
                   </Accordion>
                 </TabsContent>
 
+                {/* TAB: Negociações */}
                 <TabsContent value="negociacoes" className="mt-0">
                   <Accordion type="single" collapsible>
                     <EndpointDoc
                       method="GET"
                       path="/negociacoes"
-                      description="Busca negociações. Use telefone ou contato_id para filtrar."
+                      description="Busca negociações. Use telefone, contato_id ou status para filtrar."
                       params={[
-                        { name: 'telefone', type: 'string', required: false, description: 'Filtra pelo telefone do contato' },
-                        { name: 'contato_id', type: 'string', required: false, description: 'Filtra pelo ID do contato' },
-                        { name: 'status', type: 'string', required: false, description: 'Filtra por status: aberto, ganho, perdido' },
+                        { name: 'telefone', type: 'string', required: false, description: 'Filtra pelo telefone do contato', example: '5511999999999' },
+                        { name: 'contato_id', type: 'string', required: false, description: 'Filtra pelo ID do contato', example: 'uuid-do-contato' },
+                        { name: 'status', type: 'string', required: false, description: 'Filtra por status: aberto, ganho, perdido', example: 'aberto' },
                       ]}
                       responseExample={`{
   "success": true,
   "data": [
     {
-      "id": "uuid-da-negociacao",
-      "titulo": "Venda Produto X",
-      "valor": 1500.00,
+      "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "titulo": "Consultoria Marketing Digital",
+      "valor": 3500.00,
       "status": "aberto",
-      "notas": "Cliente interessado",
+      "notas": "Lead veio do Instagram, interessado em gestão de redes",
+      "created_at": "2026-01-15T10:00:00Z",
       "estagio": {
         "id": "uuid-do-estagio",
         "nome": "Em Negociação",
-        "cor": "#3B82F6",
+        "cor": "#F59E0B",
         "funil": {
           "id": "uuid-do-funil",
           "nome": "Vendas"
@@ -493,30 +558,40 @@ const ApiDocs = () => {
                     <EndpointDoc
                       method="POST"
                       path="/negociacoes"
-                      description="Cria uma nova negociação"
+                      description="Cria uma nova negociação. Informe telefone OU contato_id para vincular ao contato."
                       params={[
-                        { name: 'contato_id', type: 'string', required: false, description: 'ID do contato (ou use telefone)' },
-                        { name: 'telefone', type: 'string', required: false, description: 'Telefone do contato (se não tiver contato_id)' },
-                        { name: 'titulo', type: 'string', required: true, description: 'Título da negociação' },
-                        { name: 'valor', type: 'number', required: false, description: 'Valor da negociação' },
-                        { name: 'estagio_id', type: 'string', required: false, description: 'ID do estágio (usa o primeiro se não informado)' },
-                        { name: 'notas', type: 'string', required: false, description: 'Notas adicionais' },
+                        { name: 'telefone', type: 'string', required: false, description: 'Telefone do contato (se não tiver contato_id)', example: '5511999999999' },
+                        { name: 'contato_id', type: 'string', required: false, description: 'ID do contato (ou use telefone)', example: 'uuid-do-contato' },
+                        { name: 'titulo', type: 'string', required: true, description: 'Título da negociação', example: 'Consultoria Marketing Digital' },
+                        { name: 'valor', type: 'number', required: false, description: 'Valor da negociação', example: '3500.00' },
+                        { name: 'estagio_id', type: 'string', required: false, description: 'ID do estágio (usa o primeiro se não informado)', example: 'uuid-do-estagio' },
+                        { name: 'notas', type: 'string', required: false, description: 'Notas adicionais', example: 'Lead veio do Instagram' },
                       ]}
                       requestExample={`{
   "telefone": "5511999999999",
-  "titulo": "Venda Produto X",
-  "valor": 1500.00,
-  "notas": "Cliente veio pelo Instagram"
+  "titulo": "Consultoria Marketing Digital",
+  "valor": 3500.00,
+  "notas": "Lead veio do Instagram, interessado em gestão de redes"
 }`}
                       responseExample={`{
   "success": true,
   "data": {
-    "id": "uuid-da-negociacao",
-    "titulo": "Venda Produto X",
-    "valor": 1500.00,
+    "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+    "titulo": "Consultoria Marketing Digital",
+    "valor": 3500.00,
     "status": "aberto",
-    "estagio": { ... },
-    "contato": { ... }
+    "notas": "Lead veio do Instagram, interessado em gestão de redes",
+    "created_at": "2026-01-15T14:30:00Z",
+    "estagio": {
+      "id": "uuid-do-estagio",
+      "nome": "Novo Lead",
+      "cor": "#6B7280"
+    },
+    "contato": {
+      "id": "uuid-do-contato",
+      "nome": "João Silva",
+      "telefone": "5511999999999"
+    }
   }
 }`}
                     />
@@ -524,35 +599,47 @@ const ApiDocs = () => {
                     <EndpointDoc
                       method="PATCH"
                       path="/negociacoes/:id"
-                      description="Atualiza uma negociação existente (muda estágio, valor, status, etc)"
+                      description="Atualiza uma negociação existente (muda estágio, valor, status, etc). Substitua :id pelo UUID da negociação."
                       params={[
-                        { name: 'estagio_id', type: 'string', required: false, description: 'Novo ID do estágio' },
-                        { name: 'funil_id', type: 'string', required: false, description: 'Mover para outro funil (usa primeiro estágio)' },
-                        { name: 'valor', type: 'number', required: false, description: 'Novo valor' },
-                        { name: 'status', type: 'string', required: false, description: 'Novo status: aberto, ganho, perdido' },
-                        { name: 'titulo', type: 'string', required: false, description: 'Novo título' },
-                        { name: 'notas', type: 'string', required: false, description: 'Novas notas' },
+                        { name: 'estagio_id', type: 'string', required: false, description: 'Novo ID do estágio', example: 'uuid-novo-estagio' },
+                        { name: 'funil_id', type: 'string', required: false, description: 'Mover para outro funil (usa primeiro estágio)', example: 'uuid-outro-funil' },
+                        { name: 'valor', type: 'number', required: false, description: 'Novo valor', example: '4000.00' },
+                        { name: 'status', type: 'string', required: false, description: 'Novo status: aberto, ganho, perdido', example: 'ganho' },
+                        { name: 'titulo', type: 'string', required: false, description: 'Novo título', example: 'Consultoria Premium' },
+                        { name: 'notas', type: 'string', required: false, description: 'Novas notas', example: 'Fechou com valor maior' },
                       ]}
                       requestExample={`{
   "estagio_id": "uuid-novo-estagio",
-  "valor": 2000.00,
-  "status": "ganho"
+  "valor": 4000.00,
+  "status": "ganho",
+  "notas": "Negociação fechada com sucesso!"
 }`}
                       responseExample={`{
   "success": true,
   "data": {
-    "id": "uuid-da-negociacao",
-    "titulo": "Venda Produto X",
-    "valor": 2000.00,
+    "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+    "titulo": "Consultoria Marketing Digital",
+    "valor": 4000.00,
     "status": "ganho",
-    "estagio": { ... },
-    "contato": { ... }
+    "notas": "Negociação fechada com sucesso!",
+    "updated_at": "2026-01-15T16:45:00Z",
+    "estagio": {
+      "id": "uuid-novo-estagio",
+      "nome": "Fechado Ganho",
+      "cor": "#10B981"
+    },
+    "contato": {
+      "id": "uuid-do-contato",
+      "nome": "João Silva",
+      "telefone": "5511999999999"
+    }
   }
 }`}
                     />
                   </Accordion>
                 </TabsContent>
 
+                {/* TAB: Funis */}
                 <TabsContent value="funis" className="mt-0">
                   <Accordion type="single" collapsible>
                     <EndpointDoc
@@ -563,7 +650,7 @@ const ApiDocs = () => {
   "success": true,
   "data": [
     {
-      "id": "uuid-do-funil",
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
       "nome": "Vendas",
       "descricao": "Funil principal de vendas",
       "cor": "#3B82F6",
@@ -582,6 +669,20 @@ const ApiDocs = () => {
           "cor": "#F59E0B",
           "ordem": 2,
           "tipo": null
+        },
+        {
+          "id": "uuid-estagio-3",
+          "nome": "Proposta Enviada",
+          "cor": "#3B82F6",
+          "ordem": 3,
+          "tipo": null
+        },
+        {
+          "id": "uuid-estagio-4",
+          "nome": "Fechado Ganho",
+          "cor": "#10B981",
+          "ordem": 4,
+          "tipo": "ganho"
         }
       ]
     }
@@ -592,9 +693,9 @@ const ApiDocs = () => {
                     <EndpointDoc
                       method="GET"
                       path="/estagios"
-                      description="Lista estágios. Use funil_id para filtrar por funil."
+                      description="Lista estágios. Use funil_id para filtrar por funil específico."
                       params={[
-                        { name: 'funil_id', type: 'string', required: false, description: 'Filtra por funil específico' },
+                        { name: 'funil_id', type: 'string', required: false, description: 'Filtra por funil específico', example: 'uuid-do-funil' },
                       ]}
                       responseExample={`{
   "success": true,
@@ -605,6 +706,17 @@ const ApiDocs = () => {
       "cor": "#6B7280",
       "ordem": 1,
       "tipo": "entrada",
+      "funil": {
+        "id": "uuid-do-funil",
+        "nome": "Vendas"
+      }
+    },
+    {
+      "id": "uuid-estagio-2",
+      "nome": "Em Negociação",
+      "cor": "#F59E0B",
+      "ordem": 2,
+      "tipo": null,
       "funil": {
         "id": "uuid-do-funil",
         "nome": "Vendas"
@@ -627,16 +739,16 @@ const ApiDocs = () => {
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <h4 className="font-medium mb-2">1. Configure o HTTP Request</h4>
+              <h4 className="font-medium mb-2">1. Configure o HTTP Request (GET)</h4>
               <CodeBlock code={`URL: ${baseUrl}/contatos?telefone=5511999999999
 Method: GET
 Headers:
   Authorization: Bearer mk_sua_api_key_aqui
-  Content-Type: application/json`} language="plaintext" />
+  Content-Type: application/json`} language="plaintext" label="Configuração" />
             </div>
 
             <div>
-              <h4 className="font-medium mb-2">2. Para enviar dados (POST/PATCH)</h4>
+              <h4 className="font-medium mb-2">2. Para enviar dados (POST)</h4>
               <CodeBlock code={`URL: ${baseUrl}/enviar-mensagem
 Method: POST
 Headers:
@@ -646,7 +758,21 @@ Body:
 {
   "telefone": "5511999999999",
   "mensagem": "Olá! Mensagem automática do n8n"
-}`} language="plaintext" />
+}`} language="plaintext" label="Configuração" />
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">3. Para atualizar negociação (PATCH)</h4>
+              <CodeBlock code={`URL: ${baseUrl}/negociacoes/UUID_DA_NEGOCIACAO
+Method: PATCH
+Headers:
+  Authorization: Bearer mk_sua_api_key_aqui
+  Content-Type: application/json
+Body:
+{
+  "status": "ganho",
+  "valor": 5000.00
+}`} language="plaintext" label="Configuração" />
             </div>
           </CardContent>
         </Card>
