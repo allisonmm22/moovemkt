@@ -1471,7 +1471,7 @@ export default function Conversas() {
             msg.direcao === 'saida' ? 'justify-end' : 'justify-start'
           )}
         >
-          <div className="relative max-w-[70%]">
+          <div className={cn("relative", isMobile ? "max-w-[85%]" : "max-w-[70%]")}>
             {/* Menu de opções - aparece no hover apenas para mensagens de saída */}
             {msg.direcao === 'saida' && (
               <div className="absolute top-0 -left-8 opacity-0 group-hover:opacity-100 transition-opacity z-10">
@@ -1559,7 +1559,12 @@ export default function Conversas() {
                     <img 
                       src={msg.media_url!} 
                       alt="Imagem"
-                      className="max-w-[200px] max-h-[200px] object-cover rounded-xl cursor-pointer hover:opacity-90 hover:scale-[1.02] transition-all duration-200 shadow-md"
+                      className={cn(
+                        "object-cover rounded-xl cursor-pointer hover:opacity-90 transition-all duration-200 shadow-md",
+                        isMobile 
+                          ? "max-w-[180px] max-h-[180px]" 
+                          : "max-w-[200px] max-h-[200px] hover:scale-[1.02]"
+                      )}
                       onClick={() => setImagemExpandida(msg.media_url)}
                     />
                   )}
@@ -2233,7 +2238,10 @@ export default function Conversas() {
             isMobile && mobileView === 'lista' && "hidden"
           )}>
             {/* Header da Conversa */}
-            <div className="flex items-center justify-between p-4 border-b border-border bg-card/80 backdrop-blur-sm">
+            <div className={cn(
+              "flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm",
+              isMobile ? "p-2 px-3" : "p-4"
+            )}>
               <div className="flex items-center gap-2">
                 {/* Botão Voltar (Mobile) */}
                 {isMobile && (
@@ -2448,13 +2456,13 @@ export default function Conversas() {
             </div>
 
             {/* Mensagens */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className={cn("flex-1 overflow-y-auto space-y-3", isMobile ? "p-2 px-3" : "p-4")}>
               {mensagens.map((msg, index) => renderMensagem(msg, index))}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-border bg-card/80 backdrop-blur-sm">
+            <div className={cn("border-t border-border bg-card/80 backdrop-blur-sm", isMobile ? "p-2 pb-3" : "p-4")}>
               {conversaEncerrada ? (
                 <div className="flex items-center justify-between glass rounded-xl p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
@@ -2474,7 +2482,7 @@ export default function Conversas() {
                   <div className="relative" ref={attachMenuRef}>
                     <button 
                       onClick={() => setShowAttachMenu(!showAttachMenu)}
-                      className="p-2.5 rounded-xl hover:bg-muted transition-all duration-200"
+                      className={cn("rounded-xl hover:bg-muted transition-all duration-200", isMobile ? "p-2" : "p-2.5")}
                       disabled={uploading}
                     >
                       <Paperclip className={cn("h-5 w-5 text-muted-foreground transition-colors hover:text-foreground", uploading && "animate-pulse text-primary")} />
@@ -2520,7 +2528,7 @@ export default function Conversas() {
                         fetchTemplates();
                         setShowTemplateModal(true);
                       }}
-                      className="p-2.5 rounded-xl hover:bg-muted transition-all duration-200 flex items-center gap-2 border border-border hover:border-purple-500/50"
+                      className={cn("rounded-xl hover:bg-muted transition-all duration-200 flex items-center gap-2 border border-border hover:border-purple-500/50", isMobile ? "p-2" : "p-2.5")}
                       title="Enviar Template"
                     >
                       <FileSpreadsheet className="h-5 w-5 text-purple-400" />
@@ -2541,7 +2549,10 @@ export default function Conversas() {
                     value={novaMensagem}
                     onChange={(e) => setNovaMensagem(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && enviarMensagem()}
-                    className="flex-1 h-11 px-4 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200"
+                    className={cn(
+                      "flex-1 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200",
+                      isMobile ? "h-10 px-3" : "h-11 px-4"
+                    )}
                     disabled={enviando}
                   />
                   
@@ -2555,7 +2566,8 @@ export default function Conversas() {
                     onClick={enviarMensagem}
                     disabled={!novaMensagem.trim() || enviando}
                     className={cn(
-                      "h-11 w-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center transition-all duration-200 disabled:opacity-50 send-button",
+                      "rounded-xl bg-primary text-primary-foreground flex items-center justify-center transition-all duration-200 disabled:opacity-50 send-button",
+                      isMobile ? "h-10 w-10" : "h-11 w-11",
                       novaMensagem.trim() && !enviando && "shadow-[0_0_20px_hsl(var(--primary)/0.4)] hover:shadow-[0_0_24px_hsl(var(--primary)/0.5)]"
                     )}
                   >
