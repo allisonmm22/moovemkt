@@ -55,14 +55,58 @@ function calcularCustoEstimado(
 
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
-  const acoesRegex = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup)(?::([^\s@:]+)(?::([^\s@]+))?)?/gi;
-  const matches = [...texto.matchAll(acoesRegex)];
-  
   const acoes: string[] = [];
   const acoesParseadas: Acao[] = [];
   
-  for (const match of matches) {
+  // Regex para ações com valor entre aspas (permite espaços)
+  // Formato: @campo:nome-campo:"valor com espaços"
+  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup):([^\s@:]+):"([^"]+)"/gi;
+  
+  // Regex para ações sem aspas (formato original, sem espaços no valor)
+  // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa
+  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
+  
+  // Primeiro, processar ações com aspas
+  const matchesComAspas = [...texto.matchAll(regexComAspas)];
+  const posicoesProcessadas = new Set<number>();
+  
+  for (const match of matchesComAspas) {
     acoes.push(match[0]);
+    posicoesProcessadas.add(match.index!);
+    
+    const tipo = match[1].toLowerCase() as Acao['tipo'];
+    const campo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
+    const valor = match[3] || undefined; // Valor já vem limpo, sem aspas
+    
+    const acaoObj: Acao = {
+      tipo,
+      valor: valor ? `${campo}:${valor}` : campo,
+    };
+    
+    acoesParseadas.push(acaoObj);
+    console.log(`Ação parseada (com aspas): ${tipo} - campo: ${campo} - valor: "${valor}"`);
+  }
+  
+  // Depois, processar ações sem aspas (evitando duplicatas)
+  const matchesSemAspas = [...texto.matchAll(regexSemAspas)];
+  
+  for (const match of matchesSemAspas) {
+    // Pular se já foi processado como ação com aspas
+    if (posicoesProcessadas.has(match.index!)) continue;
+    
+    // Verificar se não está dentro de uma ação com aspas já processada
+    let dentroDeAspas = false;
+    for (const pos of posicoesProcessadas) {
+      const matchComAspas = matchesComAspas.find(m => m.index === pos);
+      if (matchComAspas && match.index! >= pos && match.index! < pos + matchComAspas[0].length) {
+        dentroDeAspas = true;
+        break;
+      }
+    }
+    if (dentroDeAspas) continue;
+    
+    acoes.push(match[0]);
+    
     // Remover pontuação final do valor (. , ; ! ?)
     const valorLimpo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
     const subValor = match[3]?.replace(/[.,;!?]+$/, '') || undefined;
@@ -74,6 +118,7 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
     };
     
     acoesParseadas.push(acaoObj);
+    console.log(`Ação parseada (sem aspas): ${match[1]} - valor: ${acaoObj.valor}`);
   }
   
   return { acoes, acoesParseadas };
