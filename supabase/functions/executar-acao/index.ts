@@ -964,79 +964,57 @@ serve(async (req) => {
           console.log('⚠️ [CAMPO] Valor vazio - campo será limpo');
         }
         
-        // Buscar campo personalizado pelo nome (case insensitive)
-        const { data: campo, error: campoQueryError } = await supabase
-          .from('campos_personalizados')
-          .select('id, nome, tipo')
-          .eq('conta_id', conta_id)
-          .ilike('nome', nomeCampo)
-          .maybeSingle();
-        
-        if (campoQueryError) {
-          console.log('❌ [CAMPO] Erro ao buscar campo:', campoQueryError);
-        }
-        
-        // Função para normalizar nomes removendo preposições/artigos para comparação
-        const normalizarParaComparacao = (texto: string): string => {
-          return texto
+        // Função SIMPLES para normalizar: remove acentos, espaços, hífens - tudo vira minúsculo junto
+        const normalizarCampo = (nome: string): string => {
+          return nome
             .toLowerCase()
-            .replace(/-/g, ' ')
-            .replace(/[.,;!?]+$/, '')
-            // Remover preposições e artigos comuns do português
-            .replace(/\b(de|do|da|dos|das|o|a|os|as|um|uma|uns|umas|em|no|na|nos|nas|para|por|com|ao|aos|à|às)\b/g, ' ')
-            // Remover espaços extras
-            .replace(/\s+/g, ' ')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+            .replace(/[-_\s]+/g, '')          // Remove hífens, underscores, espaços
             .trim();
         };
 
-        if (!campo) {
-          // Tentar busca mais flexível (contains)
-          console.log(`🔍 [CAMPO] Busca exata falhou, tentando busca parcial...`);
-          const { data: camposParcial } = await supabase
-            .from('campos_personalizados')
-            .select('id, nome, tipo')
-            .eq('conta_id', conta_id);
+        // Buscar TODOS os campos da conta
+        const { data: todosCampos, error: campoQueryError } = await supabase
+          .from('campos_personalizados')
+          .select('id, nome, tipo')
+          .eq('conta_id', conta_id);
+        
+        if (campoQueryError) {
+          console.log('❌ [CAMPO] Erro ao buscar campos:', campoQueryError);
+        }
+
+        console.log(`📋 [CAMPO] Campos disponíveis:`, todosCampos?.map(c => `${c.nome} (${normalizarCampo(c.nome)})`).join(', '));
+
+        // Encontrar campo comparando versões normalizadas
+        const buscaNormalizada = normalizarCampo(nomeCampo);
+        console.log(`🔍 [CAMPO] Buscando: "${nomeCampo}" → normalizado: "${buscaNormalizada}"`);
+
+        const campoEncontrado = todosCampos?.find(c => {
+          const nomeNormalizado = normalizarCampo(c.nome);
           
-          const campoEncontrado = camposParcial?.find(c => {
-            const nomeNorm = normalizarParaComparacao(c.nome);
-            const buscaNorm = normalizarParaComparacao(nomeCampo);
-            
-            console.log(`🔍 [CAMPO] Comparando: "${c.nome}" (norm: "${nomeNorm}") vs "${nomeCampo}" (norm: "${buscaNorm}")`);
-            
-            // Comparação exata após normalização (sem preposições)
-            if (nomeNorm === buscaNorm) {
-              console.log(`✅ [CAMPO] Match exato normalizado!`);
-              return true;
-            }
-            
-            // Verificar se todas as palavras significativas da busca estão no nome do campo
-            const palavrasBusca = buscaNorm.split(' ').filter(p => p.length > 2);
-            const palavrasNome = nomeNorm.split(' ').filter(p => p.length > 2);
-            
-            const todasPalavrasPresentes = palavrasBusca.length > 0 && palavrasBusca.every(palavraBusca =>
-              palavrasNome.some(palavraNome => 
-                palavraNome.includes(palavraBusca) || palavraBusca.includes(palavraNome)
-              )
-            );
-            
-            if (todasPalavrasPresentes) {
-              console.log(`✅ [CAMPO] Match por palavras-chave!`);
-              return true;
-            }
-            
-            // Fallback: busca por substring (método antigo)
-            return nomeNorm.includes(buscaNorm) || buscaNorm.includes(nomeNorm);
-          });
-          
-          if (!campoEncontrado) {
-            console.log(`❌ [CAMPO] Campo "${nomeCampo}" não encontrado para conta ${conta_id}`);
-            console.log(`📋 [CAMPO] Campos disponíveis:`, camposParcial?.map(c => c.nome).join(', '));
-            resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado. Crie o campo primeiro em Campos Personalizados.` };
-            break;
+          // Match exato normalizado
+          if (nomeNormalizado === buscaNormalizada) {
+            console.log(`✅ [CAMPO] Match exato: "${c.nome}" (${nomeNormalizado}) = "${nomeCampo}" (${buscaNormalizada})`);
+            return true;
           }
           
-          // Usar o campo encontrado na busca parcial
-          console.log(`✅ [CAMPO] Campo encontrado via busca parcial: "${campoEncontrado.nome}" (ID: ${campoEncontrado.id})`);
+          // Match parcial (um contém o outro)
+          if (nomeNormalizado.includes(buscaNormalizada) || buscaNormalizada.includes(nomeNormalizado)) {
+            console.log(`✅ [CAMPO] Match parcial: "${c.nome}" (${nomeNormalizado}) ~ "${nomeCampo}" (${buscaNormalizada})`);
+            return true;
+          }
+          
+          return false;
+        });
+          
+        if (!campoEncontrado) {
+          console.log(`❌ [CAMPO] Campo "${nomeCampo}" não encontrado para conta ${conta_id}`);
+          resultado = { sucesso: false, mensagem: `Campo "${nomeCampo}" não encontrado. Crie o campo primeiro em Campos Personalizados.` };
+          break;
+        }
+        
+        console.log(`✅ [CAMPO] Campo encontrado: "${campoEncontrado.nome}" (ID: ${campoEncontrado.id})`);
           
           // Verificar se já existe um registro para este contato/campo
           const { data: existente } = await supabase
@@ -1088,63 +1066,7 @@ serve(async (req) => {
           }
           
           console.log(`✅ [CAMPO] Campo "${campoEncontrado.nome}" atualizado para "${valorCampo}"`);
-          resultado = { sucesso: true, mensagem: `Campo "${campoEncontrado.nome}" atualizado para "${valorCampo}"` };
-          break;
-        }
-        
-        console.log(`✅ [CAMPO] Campo encontrado: "${campo.nome}" (ID: ${campo.id}, tipo: ${campo.tipo})`);
-        
-        // Verificar se já existe um registro para este contato/campo
-        const { data: existente } = await supabase
-          .from('contato_campos_valores')
-          .select('id, valor')
-          .eq('contato_id', contato_id)
-          .eq('campo_id', campo.id)
-          .maybeSingle();
-
-        console.log('📝 [CAMPO] Registro existente:', existente ? `ID: ${existente.id}, valor atual: "${existente.valor}"` : 'nenhum');
-
-        let campoError;
-        if (existente) {
-          console.log(`🔄 [CAMPO] Atualizando registro existente (ID: ${existente.id})`);
-          const result = await supabase
-            .from('contato_campos_valores')
-            .update({ 
-              valor: valorCampo,
-              updated_at: new Date().toISOString()
-            })
-            .eq('id', existente.id);
-          campoError = result.error;
-          console.log('📝 [CAMPO] Resultado UPDATE:', result.error ? `ERRO: ${result.error.message}` : 'OK');
-        } else {
-          console.log(`➕ [CAMPO] Inserindo novo registro para campo ${campo.id}`);
-          const result = await supabase
-            .from('contato_campos_valores')
-            .insert({
-              contato_id: contato_id,
-              campo_id: campo.id,
-              valor: valorCampo
-            });
-          campoError = result.error;
-          console.log('📝 [CAMPO] Resultado INSERT:', result.error ? `ERRO: ${result.error.message}` : 'OK');
-        }
-        
-        if (campoError) {
-          console.log('❌ [CAMPO] Erro ao salvar:', campoError.code, campoError.message, campoError.details);
-          throw campoError;
-        }
-        
-        // Se for campo de email, espelhar para contatos.email
-        if (campo.nome.toLowerCase().includes('email') && valorCampo && valorCampo.includes('@')) {
-          console.log('📧 [CAMPO] Espelhando email para contatos.email');
-          await supabase
-            .from('contatos')
-            .update({ email: valorCampo })
-            .eq('id', contato_id);
-        }
-        
-        console.log(`✅ [CAMPO] Campo "${campo.nome}" atualizado para "${valorCampo}"`);
-        resultado = { sucesso: true, mensagem: `Campo "${campo.nome}" atualizado para "${valorCampo}"` };
+        resultado = { sucesso: true, mensagem: `Campo "${campoEncontrado.nome}" atualizado para "${valorCampo}"` };
         break;
       }
 
