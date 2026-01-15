@@ -150,19 +150,19 @@ serve(async (req) => {
         } else if (msgContent?.imageMessage) {
           messageType = 'imagem';
           messageContent = msgContent.imageMessage.caption || '📷 Imagem';
-          mediaUrl = msgContent.imageMessage.url || msg.mediaUrl;
+          // NÃO captura URL temporária - será baixada para storage externo
         } else if (msgContent?.audioMessage) {
           messageType = 'audio';
           messageContent = '🎵 Áudio';
-          mediaUrl = msgContent.audioMessage.url || msg.mediaUrl;
+          // NÃO captura URL temporária - será baixada para storage externo
         } else if (msgContent?.videoMessage) {
           messageType = 'video';
           messageContent = msgContent.videoMessage.caption || '🎬 Vídeo';
-          mediaUrl = msgContent.videoMessage.url || msg.mediaUrl;
+          // NÃO captura URL temporária - será baixada para storage externo
         } else if (msgContent?.documentMessage) {
           messageType = 'documento';
           messageContent = msgContent.documentMessage.fileName || '📄 Documento';
-          mediaUrl = msgContent.documentMessage.url || msg.mediaUrl;
+          // NÃO captura URL temporária - será baixada para storage externo
         } else if (msgContent?.stickerMessage) {
           messageType = 'sticker';
           messageContent = '🎨 Sticker';
@@ -173,6 +173,41 @@ serve(async (req) => {
         }
 
         if (!messageContent) continue;
+
+        // Se é mídia, fazer download e salvar no Storage externo
+        if (messageType !== 'texto' && messageType !== 'sticker' && messageId) {
+          try {
+            console.log('Baixando mídia para storage externo:', messageType, messageId);
+            const downloadResponse = await fetch(
+              `${supabaseUrl}/functions/v1/download-media`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${supabaseKey}`,
+                },
+                body: JSON.stringify({
+                  instance_name: conexao.instance_name,
+                  message_id: messageId,
+                  message_type: messageType,
+                }),
+              }
+            );
+
+            if (downloadResponse.ok) {
+              const downloadData = await downloadResponse.json();
+              mediaUrl = downloadData.url;
+              console.log('Mídia baixada para storage externo:', mediaUrl);
+            } else {
+              const errorText = await downloadResponse.text();
+              console.error('Erro ao baixar mídia:', errorText);
+              mediaUrl = null;
+            }
+          } catch (downloadError) {
+            console.error('Erro ao chamar download-media:', downloadError);
+            mediaUrl = null;
+          }
+        }
 
         const telefone = remoteJid.replace('@s.whatsapp.net', '').replace('@c.us', '');
 
