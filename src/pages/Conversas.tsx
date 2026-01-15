@@ -2249,231 +2249,306 @@ export default function Conversas() {
           )}>
             {/* Header da Conversa */}
             <div className={cn(
-              "flex items-center justify-between border-b border-border bg-card/80 backdrop-blur-sm",
-              isMobile ? "p-2 px-3" : "p-4"
+              "flex items-center border-b border-border bg-card/80 backdrop-blur-sm",
+              isMobile ? "p-2 px-2 gap-1" : "p-4 justify-between"
             )}>
-              <div className="flex items-center gap-2">
-                {/* Botão Voltar (Mobile) */}
-                {isMobile && (
+              {isMobile ? (
+                // Mobile: layout compacto em linha única
+                <div className="flex items-center gap-1 flex-1 min-w-0">
+                  {/* Botão Voltar */}
                   <button
                     onClick={() => setMobileView('lista')}
-                    className="p-2 -ml-2 rounded-xl hover:bg-muted/50 transition-colors"
+                    className="p-1.5 -ml-1 rounded-lg hover:bg-muted/50 transition-colors shrink-0"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
-                )}
-                <button
-                  onClick={() => setShowContatoSidebar(true)}
-                  className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 transition-all duration-200 cursor-pointer text-left group"
-                >
-                  <div className="relative">
-                    {conversaSelecionada.contatos.is_grupo ? (
-                      <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-2 ring-blue-500/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-blue-500">
-                        <Users className="h-5 w-5" />
-                      </div>
-                    ) : conversaSelecionada.contatos.avatar_url ? (
-                      <img
-                        src={conversaSelecionada.contatos.avatar_url}
-                        alt={conversaSelecionada.contatos.nome}
-                        className="h-10 w-10 md:h-11 md:w-11 rounded-full object-cover ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-lg ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary">
-                        {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className={cn(
-                      'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
-                      conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
-                      conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
-                    )} />
-                  </div>
-                  <div className={cn(isMobile ? "max-w-[100px]" : "")}>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "font-semibold text-foreground group-hover:text-primary transition-colors",
-                        isMobile && "text-sm truncate max-w-[90px]"
-                      )}>
-                        {conversaSelecionada.contatos.nome}
-                      </span>
-                      {!isMobile && conversaSelecionada.contatos.is_grupo && (
-                        <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-500 flex items-center gap-1">
-                          <Users className="h-3 w-3" /> Grupo
-                        </span>
+                  
+                  {/* Avatar + Nome (clicável) */}
+                  <button
+                    onClick={() => setShowContatoSidebar(true)}
+                    className="flex items-center gap-2 min-w-0 hover:bg-muted/30 rounded-lg p-1 transition-colors"
+                  >
+                    <div className="relative shrink-0">
+                      {conversaSelecionada.contatos.is_grupo ? (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-1 ring-blue-500/30">
+                          <Users className="h-4 w-4" />
+                        </div>
+                      ) : conversaSelecionada.contatos.avatar_url ? (
+                        <img
+                          src={conversaSelecionada.contatos.avatar_url}
+                          alt={conversaSelecionada.contatos.nome}
+                          className="h-8 w-8 rounded-full object-cover ring-1 ring-primary/30"
+                        />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-sm ring-1 ring-primary/30">
+                          {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
+                        </div>
                       )}
-                      {!isMobile && (
-                        <span className={cn(
-                          'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
-                          conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
-                          conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500/20 text-yellow-400' :
-                          'bg-muted text-muted-foreground'
-                        )}>
-                          {getStatusLabel(conversaSelecionada.status)}
-                        </span>
-                      )}
+                      <div className={cn(
+                        'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background',
+                        conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
+                        conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
+                      )} />
                     </div>
-                    {!isMobile && (
-                      <p className="text-sm text-muted-foreground">
-                        {conversaSelecionada.contatos.telefone}
-                      </p>
-                    )}
+                    <span className="text-sm font-medium truncate max-w-[80px]">
+                      {conversaSelecionada.contatos.nome}
+                    </span>
+                  </button>
+                  
+                  {/* Botões de ação - logo após o nome */}
+                  {!conversaEncerrada ? (
+                    <div className="flex items-center gap-1 shrink-0 ml-auto pr-1">
+                      {/* Toggle Agente IA */}
+                      {!conversaSelecionada.contatos.is_grupo && (
+                        <button
+                          onClick={toggleAgenteIA}
+                          className={cn(
+                            'p-1.5 rounded-lg transition-all duration-200',
+                            conversaSelecionada.agente_ia_ativo
+                              ? 'bg-primary/20 text-primary'
+                              : 'bg-orange-500/20 text-orange-400'
+                          )}
+                        >
+                          {conversaSelecionada.agente_ia_ativo ? (
+                            <Bot className="h-4 w-4" />
+                          ) : (
+                            <User className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                      {/* Transferir */}
+                      {!conversaSelecionada.contatos.is_grupo && (
+                        <button
+                          onClick={() => setShowTransferModal(true)}
+                          className="p-1.5 rounded-lg bg-muted/50 text-muted-foreground hover:bg-muted transition-colors"
+                        >
+                          <ArrowRightLeft className="h-4 w-4" />
+                        </button>
+                      )}
+                      {/* Encerrar */}
+                      <button
+                        onClick={encerrarAtendimento}
+                        className="p-1.5 rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 transition-colors"
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 shrink-0 ml-auto pr-1">
+                      <button
+                        onClick={reabrirAtendimento}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-primary text-primary-foreground"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                        Reabrir
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // Desktop: layout original com justify-between
+                <>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setShowContatoSidebar(true)}
+                      className="flex items-center gap-3 hover:bg-muted/50 rounded-xl p-2 transition-all duration-200 cursor-pointer text-left group"
+                    >
+                      <div className="relative">
+                        {conversaSelecionada.contatos.is_grupo ? (
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500/40 to-blue-500/20 text-blue-500 ring-2 ring-blue-500/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-blue-500">
+                            <Users className="h-5 w-5" />
+                          </div>
+                        ) : conversaSelecionada.contatos.avatar_url ? (
+                          <img
+                            src={conversaSelecionada.contatos.avatar_url}
+                            alt={conversaSelecionada.contatos.nome}
+                            className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary"
+                          />
+                        ) : (
+                          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-primary/40 to-primary/20 text-primary font-bold text-lg ring-2 ring-primary/30 ring-offset-2 ring-offset-background transition-all duration-200 group-hover:ring-primary">
+                            {conversaSelecionada.contatos.nome.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className={cn(
+                          'absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background',
+                          conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500' :
+                          conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500' : 'bg-muted-foreground'
+                        )} />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                            {conversaSelecionada.contatos.nome}
+                          </span>
+                          {conversaSelecionada.contatos.is_grupo && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-500 flex items-center gap-1">
+                              <Users className="h-3 w-3" /> Grupo
+                            </span>
+                          )}
+                          <span className={cn(
+                            'px-2.5 py-0.5 rounded-full text-[11px] font-semibold uppercase tracking-wide',
+                            conversaSelecionada.status === 'em_atendimento' ? 'bg-green-500/20 text-green-400' :
+                            conversaSelecionada.status === 'aguardando_cliente' ? 'bg-yellow-500/20 text-yellow-400' :
+                            'bg-muted text-muted-foreground'
+                          )}>
+                            {getStatusLabel(conversaSelecionada.status)}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {conversaSelecionada.contatos.telefone}
+                        </p>
+                      </div>
+                    </button>
                   </div>
-                </button>
-              </div>
-              {!conversaEncerrada ? (
-                <div className="flex items-center gap-1 md:gap-2">
-                  {/* Indicador da Conexão usada */}
-                  {!isMobile && (() => {
-                    const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
-                    if (!conexaoDaConversa) return null;
-                    return (
+                  {!conversaEncerrada ? (
+                    <div className="flex items-center gap-2">
+                      {/* Indicador da Conexão usada */}
+                      {(() => {
+                        const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+                        if (!conexaoDaConversa) return null;
+                        return (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <div className={cn(
+                                  'flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium mr-2',
+                                  conexaoDaConversa.status === 'conectado' 
+                                    ? 'bg-green-500/10 text-green-500' 
+                                    : 'bg-destructive/10 text-destructive'
+                                )}>
+                                  {conexaoDaConversa.tipo_provedor === 'instagram' ? (
+                                    <Instagram className="h-3 w-3" />
+                                  ) : conexaoDaConversa.tipo_provedor === 'meta' ? (
+                                    <Phone className="h-3 w-3" />
+                                  ) : (
+                                    <Wifi className="h-3 w-3" />
+                                  )}
+                                  <span className={cn(
+                                    'h-1.5 w-1.5 rounded-full',
+                                    conexaoDaConversa.status === 'conectado' ? 'bg-green-500' : 'bg-destructive'
+                                  )} />
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">
+                                <p>{conexaoDaConversa.nome || conexaoDaConversa.instance_name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 
+                                   conexaoDaConversa.tipo_provedor === 'meta' ? 'WhatsApp Meta API' : 'WhatsApp Evolution'}
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        );
+                      })()}
+
+                      {/* Tags do Contato */}
+                      {conversaSelecionada.contatos.tags && 
+                       conversaSelecionada.contatos.tags.length > 0 && (
+                        <div className="flex items-center gap-1.5 mr-2">
+                          {conversaSelecionada.contatos.tags.slice(0, 3).map((tagNome) => {
+                            const tag = tagsDisponiveis.find(t => t.nome === tagNome);
+                            return tag ? (
+                              <span
+                                key={tag.id}
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
+                                style={{ backgroundColor: tag.cor }}
+                              >
+                                {tag.nome}
+                              </span>
+                            ) : (
+                              <span key={tagNome} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
+                                {tagNome}
+                              </span>
+                            );
+                          })}
+                          {conversaSelecionada.contatos.tags.length > 3 && (
+                            <span className="text-xs text-muted-foreground">
+                              +{conversaSelecionada.contatos.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Botão Toggle Agente IA / Humano */}
+                      {!conversaSelecionada.contatos.is_grupo && (
+                        <button
+                          onClick={toggleAgenteIA}
+                          className={cn(
+                            'flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200',
+                            conversaSelecionada.agente_ia_ativo
+                              ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
+                              : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
+                          )}
+                        >
+                          {conversaSelecionada.agente_ia_ativo ? (
+                            <>
+                              <Bot className="h-4 w-4" />
+                              <span className="flex items-center gap-1.5">
+                                {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
+                                {conversaSelecionada.etapa_ia && (
+                                  <>
+                                    <span className="text-primary/60">•</span>
+                                    <span className="text-xs opacity-80">
+                                      Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
+                                    </span>
+                                  </>
+                                )}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <User className="h-4 w-4" />
+                              <span>Humano</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+
+                      {/* Transferir */}
+                      {!conversaSelecionada.contatos.is_grupo && (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => setShowTransferModal(true)}
+                                className="p-2 rounded-xl bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
+                              >
+                                <ArrowRightLeft className="h-4 w-4" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent>Transferir</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      )}
+
+                      {/* Encerrar */}
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className={cn(
-                              'flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-medium mr-2',
-                              conexaoDaConversa.status === 'conectado' 
-                                ? 'bg-green-500/10 text-green-500' 
-                                : 'bg-destructive/10 text-destructive'
-                            )}>
-                              {conexaoDaConversa.tipo_provedor === 'instagram' ? (
-                                <Instagram className="h-3 w-3" />
-                              ) : conexaoDaConversa.tipo_provedor === 'meta' ? (
-                                <Phone className="h-3 w-3" />
-                              ) : (
-                                <Wifi className="h-3 w-3" />
-                              )}
-                              <span className={cn(
-                                'h-1.5 w-1.5 rounded-full',
-                                conexaoDaConversa.status === 'conectado' ? 'bg-green-500' : 'bg-destructive'
-                              )} />
-                            </div>
+                            <button
+                              onClick={encerrarAtendimento}
+                              className="p-2 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200"
+                            >
+                              <XCircle className="h-4 w-4" />
+                            </button>
                           </TooltipTrigger>
-                          <TooltipContent side="bottom">
-                            <p>{conexaoDaConversa.nome || conexaoDaConversa.instance_name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {conexaoDaConversa.tipo_provedor === 'instagram' ? 'Instagram' : 
-                               conexaoDaConversa.tipo_provedor === 'meta' ? 'WhatsApp Meta API' : 'WhatsApp Evolution'}
-                            </p>
-                          </TooltipContent>
+                          <TooltipContent>Encerrar</TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
-                    );
-                  })()}
-
-                  {/* Tags do Contato - Esconder em mobile */}
-                  {!isMobile && conversaSelecionada.contatos.tags && 
-                   conversaSelecionada.contatos.tags.length > 0 && (
-                    <div className="flex items-center gap-1.5 mr-2">
-                      {conversaSelecionada.contatos.tags.slice(0, 3).map((tagNome) => {
-                        const tag = tagsDisponiveis.find(t => t.nome === tagNome);
-                        return tag ? (
-                          <span
-                            key={tag.id}
-                            className="px-2 py-0.5 rounded-full text-[10px] font-medium text-white"
-                            style={{ backgroundColor: tag.cor }}
-                          >
-                            {tag.nome}
-                          </span>
-                        ) : (
-                          <span key={tagNome} className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground">
-                            {tagNome}
-                          </span>
-                        );
-                      })}
-                      {conversaSelecionada.contatos.tags.length > 3 && (
-                        <span className="text-xs text-muted-foreground">
-                          +{conversaSelecionada.contatos.tags.length - 3}
-                        </span>
-                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-muted-foreground italic">Conversa encerrada</span>
+                      <button
+                        onClick={reabrirAtendimento}
+                        className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 shadow-md hover:shadow-lg"
+                      >
+                        <RefreshCw className="h-4 w-4" />
+                        Reabrir
+                      </button>
                     </div>
                   )}
-
-                  {/* Botão Toggle Agente IA / Humano - não mostrar para grupos */}
-                  {!conversaSelecionada.contatos.is_grupo && (
-                    <button
-                      onClick={toggleAgenteIA}
-                      className={cn(
-                        'flex items-center rounded-xl text-sm font-medium transition-all duration-200',
-                        isMobile ? 'p-1.5 gap-1' : 'gap-2 px-4 py-2',
-                        conversaSelecionada.agente_ia_ativo
-                          ? 'bg-primary/20 text-primary hover:bg-primary/30 shadow-[0_0_12px_hsl(var(--primary)/0.2)]'
-                          : 'bg-orange-500/20 text-orange-400 hover:bg-orange-500/30'
-                      )}
-                    >
-                      {conversaSelecionada.agente_ia_ativo ? (
-                        <>
-                          <Bot className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
-                          <span className="hidden md:flex items-center gap-1.5">
-                            {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
-                            {conversaSelecionada.etapa_ia && (
-                              <>
-                                <span className="text-primary/60">•</span>
-                                <span className="text-xs opacity-80">
-                                  Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <User className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
-                          <span className="hidden md:inline">Humano</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
-                  {/* Transferir - não mostrar para grupos (não faz sentido transferir grupo para IA) */}
-                  {!conversaSelecionada.contatos.is_grupo && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={() => setShowTransferModal(true)}
-                            className={cn(
-                              "rounded-xl bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200",
-                              isMobile ? "p-1.5" : "p-2"
-                            )}
-                          >
-                            <ArrowRightLeft className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>Transferir</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-
-                  {/* Encerrar */}
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={encerrarAtendimento}
-                          className={cn(
-                            "rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all duration-200",
-                            isMobile ? "p-1.5" : "p-2"
-                          )}
-                        >
-                          <XCircle className={cn(isMobile ? "h-4 w-4" : "h-4 w-4")} />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent>Encerrar</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-              ) : (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-muted-foreground italic">Conversa encerrada</span>
-                  <button
-                    onClick={reabrirAtendimento}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-all duration-200 shadow-md hover:shadow-lg"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                    Reabrir
-                  </button>
-                </div>
+                </>
               )}
             </div>
 
