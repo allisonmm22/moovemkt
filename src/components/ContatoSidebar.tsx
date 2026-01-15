@@ -775,7 +775,16 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
                 placeholder="Nome do contato"
               />
             ) : (
-              <h2 className="text-xl font-bold text-foreground mt-4">{contato.nome}</h2>
+              <div className="flex items-center gap-2 mt-4">
+                <h2 className="text-xl font-bold text-foreground">{contato.nome}</h2>
+                <button
+                  onClick={() => setEditando(true)}
+                  className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-full transition-colors"
+                  title="Editar nome"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </button>
+              </div>
             )}
             
             {/* Ações rápidas */}
@@ -816,18 +825,18 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
               {!editando ? (
                 <button
                   onClick={() => setEditando(true)}
-                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
+                  className="flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors px-3 py-2 rounded-lg hover:bg-primary/10 active:bg-primary/20 min-h-[44px]"
                 >
-                  <Edit2 className="h-3.5 w-3.5" />
+                  <Edit2 className="h-4 w-4" />
                   Editar
                 </button>
               ) : (
                 <button
                   onClick={handleSave}
                   disabled={salvando}
-                  className="flex items-center gap-1.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 text-sm text-emerald-500 hover:text-emerald-400 transition-colors px-3 py-2 rounded-lg hover:bg-emerald-500/10 active:bg-emerald-500/20 min-h-[44px] disabled:opacity-50"
                 >
-                  <Save className="h-3.5 w-3.5" />
+                  <Save className="h-4 w-4" />
                   {salvando ? 'Salvando...' : 'Salvar'}
                 </button>
               )}
