@@ -1472,13 +1472,23 @@ export default function Conversas() {
           )}
         >
           <div className={cn("relative", isMobile ? "max-w-[85%]" : "max-w-[70%]")}>
-            {/* Menu de opções - aparece no hover apenas para mensagens de saída */}
+            {/* Menu de opções - posicionado dentro da bolha no mobile */}
             {msg.direcao === 'saida' && (
-              <div className="absolute top-0 -left-8 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+              <div className={cn(
+                "absolute z-10 transition-opacity",
+                isMobile 
+                  ? "top-1 right-1 opacity-100" 
+                  : "top-0 -left-8 opacity-0 group-hover:opacity-100"
+              )}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="p-1 rounded-md bg-background/80 hover:bg-muted border border-border/50 shadow-sm">
-                      <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                    <button className={cn(
+                      "rounded-md border border-border/50 shadow-sm",
+                      isMobile 
+                        ? "p-0.5 bg-black/20 hover:bg-black/40" 
+                        : "p-1 bg-background/80 hover:bg-muted"
+                    )}>
+                      <MoreVertical className={cn("text-muted-foreground", isMobile ? "h-3.5 w-3.5" : "h-4 w-4")} />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="bg-popover">
@@ -1717,10 +1727,10 @@ export default function Conversas() {
   return (
     <MainLayout>
       <div className={cn(
-        "flex overflow-hidden bg-card animate-fade-in",
+        "flex bg-card animate-fade-in",
         isMobile 
-          ? "h-[calc(100vh-7.5rem)]" 
-          : "h-[calc(100vh-3rem)] rounded-xl border border-border"
+          ? "h-[calc(100dvh-7.5rem)] overflow-x-hidden" 
+          : "h-[calc(100vh-3rem)] rounded-xl border border-border overflow-hidden"
       )}>
         {/* Lista de Conversas */}
         <div className={cn(
@@ -2456,13 +2466,19 @@ export default function Conversas() {
             </div>
 
             {/* Mensagens */}
-            <div className={cn("flex-1 overflow-y-auto space-y-3", isMobile ? "p-2 px-3" : "p-4")}>
+            <div className={cn(
+              "flex-1 overflow-y-auto overflow-x-hidden space-y-3", 
+              isMobile ? "p-2 px-3 pb-4" : "p-4"
+            )}>
               {mensagens.map((msg, index) => renderMensagem(msg, index))}
               <div ref={messagesEndRef} />
             </div>
 
             {/* Input */}
-            <div className={cn("border-t border-border bg-card/80 backdrop-blur-sm", isMobile ? "p-2 pb-3" : "p-4")}>
+            <div className={cn(
+              "border-t border-border bg-card/80 backdrop-blur-sm shrink-0", 
+              isMobile ? "p-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))]" : "p-4"
+            )}>
               {conversaEncerrada ? (
                 <div className="flex items-center justify-between glass rounded-xl p-4">
                   <div className="flex items-center gap-3 text-muted-foreground">
