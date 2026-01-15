@@ -270,13 +270,13 @@ const Integracoes = () => {
             comingSoon
           />
 
-          {/* Zapier/N8N */}
+          {/* API / N8N / Make */}
           <IntegrationCard
-            icon={<Zap className="h-5 w-5 text-muted-foreground" />}
-            title="Zapier / N8N"
-            description="Automações e workflows"
-            status="coming_soon"
-            comingSoon
+            icon={<Zap className="h-5 w-5 text-orange-500" />}
+            title="API / N8N / Make"
+            description="Integre via HTTP"
+            status="disconnected"
+            onConfigure={() => navigate('/api-docs')}
           />
         </div>
       </div>
