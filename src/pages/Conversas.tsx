@@ -296,6 +296,11 @@ export default function Conversas() {
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const reconnectingRef = useRef(false);
   const fetchConversasRef = useRef<() => Promise<void>>(null!);
+  
+  // Refs para fetchMensagens e marcarComoLida (fallback no Realtime)
+  const fetchMensagensRef = useRef<(conversaId: string) => Promise<void>>(null!);
+  const fetchMensagensTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const marcarComoLidaRef = useRef<(conversaId: string) => Promise<void>>(null!);
 
   // Helper: buscar conexão específica de uma conversa (com fallback inteligente)
   const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
@@ -582,9 +587,11 @@ export default function Conversas() {
         (payload) => {
           console.log('Mensagem recebida via realtime:', payload.eventType, payload);
           const mensagemPayload = payload.new as Mensagem;
+          const conversaAbertaId = conversaSelecionadaRef.current?.id;
+          const isMensagemDaConversaAberta = conversaAbertaId && mensagemPayload.conversa_id === conversaAbertaId;
           
-          // Usar a ref para verificar a conversa selecionada atual
-          if (conversaSelecionadaRef.current && mensagemPayload.conversa_id === conversaSelecionadaRef.current.id) {
+          // Atualizar mensagens da conversa aberta
+          if (isMensagemDaConversaAberta) {
             if (payload.eventType === 'INSERT') {
               setMensagens((prev) => {
                 // Verificar se já existe (pode ser a mensagem otimista que enviamos)
@@ -596,10 +603,14 @@ export default function Conversas() {
                 
                 if (mensagemOtimista) {
                   // Substituir a otimista pela real do servidor
-                  return prev.map(m => 
+                  const updated = prev.map(m => 
                     m.id === mensagemOtimista.id 
                       ? { ...mensagemPayload, _sending: false, _isOptimistic: false } 
                       : m
+                  );
+                  // Ordenar por created_at para garantir ordem correta
+                  return updated.sort((a, b) => 
+                    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
                   );
                 }
                 
@@ -608,8 +619,29 @@ export default function Conversas() {
                   return prev;
                 }
                 
-                return [...prev, mensagemPayload];
+                // Adicionar nova mensagem e ordenar
+                const newMessages = [...prev, mensagemPayload];
+                return newMessages.sort((a, b) => 
+                  new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+                );
               });
+              
+              // FALLBACK: Debounced refetch para garantir consistência
+              if (fetchMensagensTimeoutRef.current) {
+                clearTimeout(fetchMensagensTimeoutRef.current);
+              }
+              fetchMensagensTimeoutRef.current = setTimeout(() => {
+                // Verificar se ainda é a mesma conversa
+                if (conversaSelecionadaRef.current?.id === mensagemPayload.conversa_id) {
+                  console.log('Fallback: refetch de mensagens para conversa aberta');
+                  fetchMensagensRef.current?.(mensagemPayload.conversa_id);
+                }
+              }, 400);
+              
+              // Marcar como lida se é mensagem de entrada na conversa aberta
+              if (mensagemPayload.direcao === 'entrada') {
+                marcarComoLidaRef.current?.(mensagemPayload.conversa_id);
+              }
             } else if (payload.eventType === 'UPDATE') {
               // Atualizar mensagem existente (para reações)
               setMensagens((prev) => prev.map(m => 
@@ -622,7 +654,8 @@ export default function Conversas() {
           if (payload.eventType === 'INSERT' && mensagemPayload.direcao === 'entrada') {
             setConversas((prevConversas) => {
               const conversaDaMensagem = prevConversas.find(c => c.id === mensagemPayload.conversa_id);
-              if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
+              // Só notificar se NÃO é a conversa aberta
+              if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false && !isMensagemDaConversaAberta) {
                 notifyNewMessage(
                   conversaDaMensagem.contatos.nome,
                   mensagemPayload.conteudo,
@@ -649,11 +682,17 @@ export default function Conversas() {
             }
             // Atualizar apenas a conversa específica no state
             const updated = [...prev];
+            
+            // NÃO incrementar nao_lidas se é a conversa aberta
+            const shouldIncrementUnread = mensagemPayload.direcao === 'entrada' && !isMensagemDaConversaAberta;
+            
             updated[idx] = {
               ...updated[idx],
               ultima_mensagem: (mensagemPayload.conteudo || '').substring(0, 100),
               ultima_mensagem_at: mensagemPayload.created_at,
-              nao_lidas: (updated[idx].nao_lidas || 0) + (mensagemPayload.direcao === 'entrada' ? 1 : 0)
+              nao_lidas: shouldIncrementUnread 
+                ? (updated[idx].nao_lidas || 0) + 1 
+                : (isMensagemDaConversaAberta ? 0 : updated[idx].nao_lidas || 0)
             };
             // Re-ordenar por ultima_mensagem_at
             return updated.sort((a, b) => 
@@ -727,6 +766,9 @@ export default function Conversas() {
       }
       if (fetchConversasTimeoutRef.current) {
         clearTimeout(fetchConversasTimeoutRef.current);
+      }
+      if (fetchMensagensTimeoutRef.current) {
+        clearTimeout(fetchMensagensTimeoutRef.current);
       }
     };
   }, [usuario?.conta_id]);
@@ -914,6 +956,15 @@ export default function Conversas() {
       console.error('Erro ao marcar como lida:', error);
     }
   };
+
+  // Manter refs atualizadas para usar no Realtime (evitar dependências instáveis)
+  useEffect(() => {
+    fetchMensagensRef.current = fetchMensagens;
+  }, [fetchMensagens]);
+  
+  useEffect(() => {
+    marcarComoLidaRef.current = marcarComoLida;
+  }, [marcarComoLida]);
 
   const toggleAgenteIA = async () => {
     if (!conversaSelecionada) return;
