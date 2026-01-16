@@ -291,6 +291,11 @@ export default function Conversas() {
   
   // Debounce ref para fetchConversas
   const fetchConversasTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Refs para controle do Realtime - reconexão e canal
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const reconnectingRef = useRef(false);
+  const fetchConversasRef = useRef<() => Promise<void>>(null!);
 
   // Helper: buscar conexão específica de uma conversa (com fallback inteligente)
   const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
@@ -547,12 +552,30 @@ export default function Conversas() {
     }
   }, [usuario?.conta_id]);
 
+  // Manter ref atualizada para fetchConversas (evitar dependência instável no useCallback)
+  useEffect(() => {
+    fetchConversasRef.current = fetchConversas;
+  }, [fetchConversas]);
+
   const setupRealtimeSubscription = useCallback(() => {
-    // Remover channels anteriores para evitar duplicatas
-    supabase.removeAllChannels();
+    // Evitar reconexões simultâneas
+    if (reconnectingRef.current) {
+      console.log('Já reconectando, ignorando...');
+      return () => {};
+    }
+    
+    // Limpar canal anterior se existir (específico, não removeAllChannels)
+    if (realtimeChannelRef.current) {
+      console.log('Removendo canal anterior...');
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+    
+    const channelName = `conversas-mensagens-${usuario?.conta_id || 'default'}`;
+    console.log('Criando canal realtime:', channelName);
     
     const channel = supabase
-      .channel('conversas-mensagens-realtime')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'mensagens' },
@@ -615,12 +638,12 @@ export default function Conversas() {
           setConversas((prev) => {
             const idx = prev.findIndex(c => c.id === mensagemPayload.conversa_id);
             if (idx === -1) {
-              // Nova conversa detectada - debounced fetch
+              // Nova conversa detectada - debounced fetch usando ref
               if (fetchConversasTimeoutRef.current) {
                 clearTimeout(fetchConversasTimeoutRef.current);
               }
               fetchConversasTimeoutRef.current = setTimeout(() => {
-                fetchConversas();
+                fetchConversasRef.current?.();
               }, 500);
               return prev;
             }
@@ -644,12 +667,12 @@ export default function Conversas() {
         { event: 'INSERT', schema: 'public', table: 'conversas' },
         (payload) => {
           console.log('Nova conversa recebida via realtime:', payload);
-          // Debounced fetch para nova conversa
+          // Debounced fetch para nova conversa usando ref
           if (fetchConversasTimeoutRef.current) {
             clearTimeout(fetchConversasTimeoutRef.current);
           }
           fetchConversasTimeoutRef.current = setTimeout(() => {
-            fetchConversas();
+            fetchConversasRef.current?.();
           }, 300);
           // Notificação sonora para nova conversa
           try {
@@ -676,17 +699,37 @@ export default function Conversas() {
           });
         }
       )
-      .subscribe((status) => {
-        console.log('Status da subscription realtime:', status);
+      .subscribe((status, error) => {
+        console.log('Status da subscription realtime:', status, error);
+        
+        // Reconectar automaticamente em caso de timeout, fechamento ou erro
+        if (status === 'TIMED_OUT' || status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.warn('Realtime desconectado, tentando reconectar em 3 segundos...');
+          
+          reconnectingRef.current = true;
+          realtimeChannelRef.current = null;
+          
+          setTimeout(() => {
+            reconnectingRef.current = false;
+            setupRealtimeSubscription();
+          }, 3000);
+        } else if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime conectado com sucesso!');
+        }
       });
+    
+    realtimeChannelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
+      if (realtimeChannelRef.current) {
+        supabase.removeChannel(realtimeChannelRef.current);
+        realtimeChannelRef.current = null;
+      }
       if (fetchConversasTimeoutRef.current) {
         clearTimeout(fetchConversasTimeoutRef.current);
       }
     };
-  }, [fetchConversas]);
+  }, [usuario?.conta_id]);
 
 
   const fetchUsuarios = async () => {
