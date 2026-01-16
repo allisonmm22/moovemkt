@@ -498,7 +498,38 @@ serve(async (req) => {
       body: JSON.stringify(body),
     });
 
-    const result = await response.json();
+    // Ler resposta como texto primeiro para evitar erro de parse JSON
+    const responseText = await response.text();
+    let result: Record<string, unknown>;
+    
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      // Resposta não é JSON válido (ex: "Bad Gateway")
+      console.error('Resposta inválida da Evolution API:', responseText);
+      
+      await supabase.from('logs_atividade').insert({
+        conta_id: conexao.conta_id,
+        tipo: 'erro_whatsapp',
+        descricao: `Erro ao enviar mensagem para ${telefone}`,
+        metadata: { 
+          erro: responseText,
+          status_code: response.status,
+          instance_name: conexao.instance_name,
+          tipo_mensagem: tipo,
+        },
+      });
+      
+      return new Response(JSON.stringify({ 
+        error: 'Erro na Evolution API', 
+        details: responseText,
+        status_code: response.status 
+      }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    
     console.log('Resposta Evolution:', result);
 
     if (!response.ok) {
@@ -524,7 +555,7 @@ serve(async (req) => {
     }
 
     // Salvar evolution_msg_id no metadata da mensagem para permitir deletar do WhatsApp
-    const evolutionMsgId = result?.key?.id;
+    const evolutionMsgId = (result as { key?: { id?: string } })?.key?.id;
     if (mensagem_id && evolutionMsgId) {
       console.log('Salvando evolution_msg_id:', evolutionMsgId, 'para mensagem_id:', mensagem_id);
       const { error: updateError } = await supabase
