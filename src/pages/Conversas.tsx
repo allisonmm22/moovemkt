@@ -194,6 +194,12 @@ interface Mensagem {
   deletada_por?: string;
   deletada_em?: string;
   usuario_deletou?: { nome: string } | null;
+  // Optimistic UI flags
+  _isOptimistic?: boolean;
+  _sending?: boolean;
+  _error?: boolean;
+  _tempId?: string;
+  usuario_id?: string;
 }
 
 interface Conexao {
@@ -499,7 +505,30 @@ export default function Conversas() {
           // Usar a ref para verificar a conversa selecionada atual
           if (conversaSelecionadaRef.current && mensagemPayload.conversa_id === conversaSelecionadaRef.current.id) {
             if (payload.eventType === 'INSERT') {
-              setMensagens((prev) => [...prev, mensagemPayload]);
+              setMensagens((prev) => {
+                // Verificar se já existe (pode ser a mensagem otimista que enviamos)
+                const mensagemOtimista = prev.find(m => 
+                  m._isOptimistic && 
+                  m.conteudo === mensagemPayload.conteudo &&
+                  m.direcao === 'saida'
+                );
+                
+                if (mensagemOtimista) {
+                  // Substituir a otimista pela real do servidor
+                  return prev.map(m => 
+                    m.id === mensagemOtimista.id 
+                      ? { ...mensagemPayload, _sending: false, _isOptimistic: false } 
+                      : m
+                  );
+                }
+                
+                // Se não é otimista, verificar se já existe pelo ID
+                if (prev.some(m => m.id === mensagemPayload.id)) {
+                  return prev;
+                }
+                
+                return [...prev, mensagemPayload];
+              });
             } else if (payload.eventType === 'UPDATE') {
               // Atualizar mensagem existente (para reações)
               setMensagens((prev) => prev.map(m => 
@@ -813,14 +842,46 @@ export default function Conversas() {
       if (!permitido) return;
     }
 
-    setEnviando(true);
-    try {
-      // Aplicar assinatura se ativada
-      const mensagemFinal = usuario?.assinatura_ativa !== false
-        ? `${usuario?.nome}:\n${novaMensagem}`
-        : novaMensagem;
+    // Aplicar assinatura se ativada
+    const mensagemFinal = usuario?.assinatura_ativa !== false
+      ? `${usuario?.nome}:\n${novaMensagem}`
+      : novaMensagem;
 
-      // Salvar no banco e pegar o ID para passar ao enviar-mensagem
+    // 1. Criar mensagem otimista IMEDIATAMENTE
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const mensagemOtimista: Mensagem = {
+      id: tempId,
+      conversa_id: conversaSelecionada.id,
+      usuario_id: usuario!.id,
+      conteudo: mensagemFinal,
+      direcao: 'saida',
+      tipo: 'texto',
+      enviada_por_ia: false,
+      enviada_por_dispositivo: false,
+      created_at: new Date().toISOString(),
+      lida: true,
+      media_url: null,
+      _isOptimistic: true,
+      _sending: true,
+      _tempId: tempId,
+    };
+
+    // 2. ADICIONAR À LISTA INSTANTANEAMENTE
+    setMensagens(prev => [...prev, mensagemOtimista]);
+    setNovaMensagem(''); // Limpa input imediatamente
+
+    // 3. Atualizar estado local da conversa imediatamente
+    setConversaSelecionada(prev => prev ? {
+      ...prev,
+      agente_ia_ativo: false,
+      atendente_id: usuario!.id,
+      ultima_mensagem: mensagemFinal,
+      ultima_mensagem_at: new Date().toISOString(),
+    } : null);
+
+    // 4. Processar em background (sem bloquear UI)
+    try {
+      // Salvar no banco
       const { data: novaMensagemData, error } = await supabase.from('mensagens').insert({
         conversa_id: conversaSelecionada.id,
         usuario_id: usuario!.id,
@@ -832,8 +893,15 @@ export default function Conversas() {
 
       if (error) throw error;
 
-      // Atualizar conversa - desativar IA e atribuir atendente humano
-      await supabase
+      // Atualizar mensagem otimista para mostrar que salvou (remover _sending)
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId 
+          ? { ...m, id: novaMensagemData.id, _sending: false } 
+          : m
+      ));
+
+      // Atualizar conversa no banco (em paralelo com envio WhatsApp)
+      const updateConversaPromise = supabase
         .from('conversas')
         .update({
           ultima_mensagem: mensagemFinal,
@@ -844,51 +912,55 @@ export default function Conversas() {
         })
         .eq('id', conversaSelecionada.id);
 
-      // Atualizar estado local
-      setConversaSelecionada(prev => prev ? {
-        ...prev,
-        agente_ia_ativo: false,
-        atendente_id: usuario!.id
-      } : null);
-
       // Buscar conexão específica da conversa
       const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
       const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
       
       if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
-          body: {
-            conexao_id: conexaoIdToUse,
-            telefone: conversaSelecionada.contatos.telefone,
-            mensagem: mensagemFinal,
-            grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
-            mensagem_id: novaMensagemData?.id,
-          },
-        });
+        // Enviar para WhatsApp em paralelo com update da conversa
+        const [, envioResult] = await Promise.all([
+          updateConversaPromise,
+          supabase.functions.invoke('enviar-mensagem', {
+            body: {
+              conexao_id: conexaoIdToUse,
+              telefone: conversaSelecionada.contatos.telefone,
+              mensagem: mensagemFinal,
+              grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
+              mensagem_id: novaMensagemData?.id,
+            },
+          })
+        ]);
 
-        if (envioError) {
-          console.error('Erro ao enviar via WhatsApp:', envioError);
+        if (envioResult.error) {
+          console.error('Erro ao enviar via WhatsApp:', envioResult.error);
           toast.error('Mensagem salva, mas erro ao enviar via WhatsApp');
         }
         
         // Atualizar conexao_id na conversa se estava vazio
         if (!conversaSelecionada.conexao_id && conexaoIdToUse) {
-          await supabase
+          supabase
             .from('conversas')
             .update({ conexao_id: conexaoIdToUse })
             .eq('id', conversaSelecionada.id);
         }
-      } else if (!conexaoDaConversa || conexaoDaConversa.status !== 'conectado') {
-        toast.warning('Conexão não disponível. Mensagem salva apenas no CRM.');
+      } else {
+        await updateConversaPromise;
+        if (!conexaoDaConversa || conexaoDaConversa.status !== 'conectado') {
+          toast.warning('Conexão não disponível. Mensagem salva apenas no CRM.');
+        }
       }
 
-      setNovaMensagem('');
-      fetchMensagens(conversaSelecionada.id);
+      // Atualizar lista de conversas (para ordenação)
       fetchConversas();
     } catch (error) {
+      console.error('Erro ao enviar mensagem:', error);
+      // Marcar mensagem como erro
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId || m._tempId === tempId
+          ? { ...m, _error: true, _sending: false } 
+          : m
+      ));
       toast.error('Erro ao enviar mensagem');
-    } finally {
-      setEnviando(false);
     }
   };
 
@@ -1691,7 +1763,11 @@ export default function Conversas() {
               >
                 <span className="text-[11px] opacity-70">{formatTime(msg.created_at)}</span>
                 {msg.direcao === 'saida' && (
-                  msg.lida ? (
+                  msg._sending ? (
+                    <Clock className="h-3.5 w-3.5 opacity-70 animate-pulse" />
+                  ) : msg._error ? (
+                    <XCircle className="h-3.5 w-3.5 text-destructive" />
+                  ) : msg.lida ? (
                     <CheckCheck className="h-3.5 w-3.5 text-blue-300" />
                   ) : (
                     <Check className="h-3.5 w-3.5 opacity-70" />
