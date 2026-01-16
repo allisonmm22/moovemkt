@@ -986,10 +986,15 @@ export default function Conversas() {
   const enviarMensagem = async () => {
     if (!novaMensagem.trim() || !conversaSelecionada || enviando) return;
 
+    setEnviando(true);
+
     // Validar limite de mensagens do plano
     if (usuario?.conta_id) {
       const permitido = await validarEExibirErro(usuario.conta_id, 'mensagens', true);
-      if (!permitido) return;
+      if (!permitido) {
+        setEnviando(false);
+        return;
+      }
     }
 
     // Aplicar assinatura se ativada
@@ -1117,6 +1122,8 @@ export default function Conversas() {
           : m
       ));
       toast.error('Erro ao enviar mensagem');
+    } finally {
+      setEnviando(false);
     }
   };
 
@@ -2993,7 +3000,12 @@ export default function Conversas() {
                     placeholder="Digite uma mensagem..."
                     value={novaMensagem}
                     onChange={(e) => setNovaMensagem(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && enviarMensagem()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !enviando) {
+                        e.preventDefault();
+                        enviarMensagem();
+                      }
+                    }}
                     className={cn(
                       "flex-1 rounded-xl bg-input border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 input-glow transition-all duration-200",
                       isMobile ? "h-10 px-3" : "h-11 px-4"
