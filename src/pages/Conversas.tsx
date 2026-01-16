@@ -288,6 +288,9 @@ export default function Conversas() {
   const [conexoes, setConexoes] = useState<Conexao[]>([]);
   const [pollingActive, setPollingActive] = useState(false);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Debounce ref para fetchConversas
+  const fetchConversasTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper: buscar conexão específica de uma conversa (com fallback inteligente)
   const getConexaoDaConversa = useCallback((conversa: Conversa | null): Conexao | null => {
@@ -389,7 +392,7 @@ export default function Conversas() {
         })
       );
       
-      fetchConversas();
+      // Não chamar fetchConversas no polling - realtime cuida disso
     } catch (error) {
       console.error('Erro no polling:', error);
     }
@@ -403,8 +406,8 @@ export default function Conversas() {
     
     if (temEvolutionConectada && !pollingActive) {
       setPollingActive(true);
-      // Polling a cada 10 segundos
-      pollingIntervalRef.current = setInterval(pollMessages, 10000);
+      // Polling a cada 30 segundos (otimizado - webhook já cuida do resto)
+      pollingIntervalRef.current = setInterval(pollMessages, 30000);
       // Executar imediatamente
       pollMessages();
     } else if (!temEvolutionConectada && pollingActive) {
@@ -492,97 +495,8 @@ export default function Conversas() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const setupRealtimeSubscription = () => {
-    const channel = supabase
-      .channel('conversas-mensagens-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'mensagens' },
-        (payload) => {
-          console.log('Mensagem recebida via realtime:', payload.eventType, payload);
-          const mensagemPayload = payload.new as Mensagem;
-          
-          // Usar a ref para verificar a conversa selecionada atual
-          if (conversaSelecionadaRef.current && mensagemPayload.conversa_id === conversaSelecionadaRef.current.id) {
-            if (payload.eventType === 'INSERT') {
-              setMensagens((prev) => {
-                // Verificar se já existe (pode ser a mensagem otimista que enviamos)
-                const mensagemOtimista = prev.find(m => 
-                  m._isOptimistic && 
-                  m.conteudo === mensagemPayload.conteudo &&
-                  m.direcao === 'saida'
-                );
-                
-                if (mensagemOtimista) {
-                  // Substituir a otimista pela real do servidor
-                  return prev.map(m => 
-                    m.id === mensagemOtimista.id 
-                      ? { ...mensagemPayload, _sending: false, _isOptimistic: false } 
-                      : m
-                  );
-                }
-                
-                // Se não é otimista, verificar se já existe pelo ID
-                if (prev.some(m => m.id === mensagemPayload.id)) {
-                  return prev;
-                }
-                
-                return [...prev, mensagemPayload];
-              });
-            } else if (payload.eventType === 'UPDATE') {
-              // Atualizar mensagem existente (para reações)
-              setMensagens((prev) => prev.map(m => 
-                m.id === mensagemPayload.id ? mensagemPayload : m
-              ));
-            }
-          }
-          
-          // Notificação sonora + browser para mensagens de entrada em conversas atendidas por humano
-          if (payload.eventType === 'INSERT' && mensagemPayload.direcao === 'entrada') {
-            const conversaDaMensagem = conversas.find(c => c.id === mensagemPayload.conversa_id);
-            if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
-              notifyNewMessage(
-                conversaDaMensagem.contatos.nome,
-                mensagemPayload.conteudo,
-                () => setConversaSelecionada(conversaDaMensagem)
-              );
-            }
-          }
-          
-          fetchConversas();
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'conversas' },
-        (payload) => {
-          console.log('Nova conversa recebida via realtime:', payload);
-          fetchConversas();
-          // Notificação sonora para nova conversa
-          try {
-            const audio = new Audio('/notification.mp3');
-            audio.volume = 0.3;
-            audio.play().catch(() => {});
-          } catch {}
-        }
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'conversas' },
-        () => {
-          fetchConversas();
-        }
-      )
-      .subscribe((status) => {
-        console.log('Status da subscription realtime:', status);
-      });
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  };
-
-  const fetchConversas = async () => {
+  // OTIMIZAÇÃO: Memoizar fetchConversas para evitar re-criações desnecessárias
+  const fetchConversas = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('conversas')
@@ -631,7 +545,149 @@ export default function Conversas() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [usuario?.conta_id]);
+
+  const setupRealtimeSubscription = useCallback(() => {
+    // Remover channels anteriores para evitar duplicatas
+    supabase.removeAllChannels();
+    
+    const channel = supabase
+      .channel('conversas-mensagens-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'mensagens' },
+        (payload) => {
+          console.log('Mensagem recebida via realtime:', payload.eventType, payload);
+          const mensagemPayload = payload.new as Mensagem;
+          
+          // Usar a ref para verificar a conversa selecionada atual
+          if (conversaSelecionadaRef.current && mensagemPayload.conversa_id === conversaSelecionadaRef.current.id) {
+            if (payload.eventType === 'INSERT') {
+              setMensagens((prev) => {
+                // Verificar se já existe (pode ser a mensagem otimista que enviamos)
+                const mensagemOtimista = prev.find(m => 
+                  m._isOptimistic && 
+                  m.conteudo === mensagemPayload.conteudo &&
+                  m.direcao === 'saida'
+                );
+                
+                if (mensagemOtimista) {
+                  // Substituir a otimista pela real do servidor
+                  return prev.map(m => 
+                    m.id === mensagemOtimista.id 
+                      ? { ...mensagemPayload, _sending: false, _isOptimistic: false } 
+                      : m
+                  );
+                }
+                
+                // Se não é otimista, verificar se já existe pelo ID
+                if (prev.some(m => m.id === mensagemPayload.id)) {
+                  return prev;
+                }
+                
+                return [...prev, mensagemPayload];
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              // Atualizar mensagem existente (para reações)
+              setMensagens((prev) => prev.map(m => 
+                m.id === mensagemPayload.id ? mensagemPayload : m
+              ));
+            }
+          }
+          
+          // Notificação sonora + browser para mensagens de entrada em conversas atendidas por humano
+          if (payload.eventType === 'INSERT' && mensagemPayload.direcao === 'entrada') {
+            setConversas((prevConversas) => {
+              const conversaDaMensagem = prevConversas.find(c => c.id === mensagemPayload.conversa_id);
+              if (conversaDaMensagem && conversaDaMensagem.agente_ia_ativo === false) {
+                notifyNewMessage(
+                  conversaDaMensagem.contatos.nome,
+                  mensagemPayload.conteudo,
+                  () => setConversaSelecionada(conversaDaMensagem)
+                );
+              }
+              return prevConversas;
+            });
+          }
+          
+          // OTIMIZAÇÃO: Atualizar apenas a conversa específica no estado local
+          // ao invés de refazer fetch completo
+          setConversas((prev) => {
+            const idx = prev.findIndex(c => c.id === mensagemPayload.conversa_id);
+            if (idx === -1) {
+              // Nova conversa detectada - debounced fetch
+              if (fetchConversasTimeoutRef.current) {
+                clearTimeout(fetchConversasTimeoutRef.current);
+              }
+              fetchConversasTimeoutRef.current = setTimeout(() => {
+                fetchConversas();
+              }, 500);
+              return prev;
+            }
+            // Atualizar apenas a conversa específica no state
+            const updated = [...prev];
+            updated[idx] = {
+              ...updated[idx],
+              ultima_mensagem: (mensagemPayload.conteudo || '').substring(0, 100),
+              ultima_mensagem_at: mensagemPayload.created_at,
+              nao_lidas: (updated[idx].nao_lidas || 0) + (mensagemPayload.direcao === 'entrada' ? 1 : 0)
+            };
+            // Re-ordenar por ultima_mensagem_at
+            return updated.sort((a, b) => 
+              new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
+            );
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'conversas' },
+        (payload) => {
+          console.log('Nova conversa recebida via realtime:', payload);
+          // Debounced fetch para nova conversa
+          if (fetchConversasTimeoutRef.current) {
+            clearTimeout(fetchConversasTimeoutRef.current);
+          }
+          fetchConversasTimeoutRef.current = setTimeout(() => {
+            fetchConversas();
+          }, 300);
+          // Notificação sonora para nova conversa
+          try {
+            const audio = new Audio('/notification.mp3');
+            audio.volume = 0.3;
+            audio.play().catch(() => {});
+          } catch {}
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'conversas' },
+        (payload) => {
+          // OTIMIZAÇÃO: Atualizar apenas a conversa modificada
+          const conversaAtualizada = payload.new as Conversa;
+          setConversas((prev) => {
+            const idx = prev.findIndex(c => c.id === conversaAtualizada.id);
+            if (idx === -1) return prev;
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...conversaAtualizada };
+            return updated.sort((a, b) => 
+              new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
+            );
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('Status da subscription realtime:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (fetchConversasTimeoutRef.current) {
+        clearTimeout(fetchConversasTimeoutRef.current);
+      }
+    };
+  }, [fetchConversas]);
+
 
   const fetchUsuarios = async () => {
     try {
@@ -950,8 +1006,14 @@ export default function Conversas() {
         }
       }
 
-      // Atualizar lista de conversas (para ordenação)
-      fetchConversas();
+      // OTIMIZAÇÃO: Atualizar lista localmente - Realtime cuidará do resto
+      setConversas(prev => prev.map(c => 
+        c.id === conversaSelecionada.id 
+          ? { ...c, ultima_mensagem: mensagemFinal, ultima_mensagem_at: new Date().toISOString() }
+          : c
+      ).sort((a, b) => 
+        new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
+      ));
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error);
       // Marcar mensagem como erro
@@ -992,8 +1054,26 @@ export default function Conversas() {
 
       toast.success('Atendimento encerrado');
       setConversaSelecionada(prev => prev ? { ...prev, status: 'encerrado' } : null);
-      fetchConversas();
-      fetchMensagens(conversaSelecionada.id);
+      
+      // OTIMIZAÇÃO: Atualizar estado local - Realtime cuidará do resto
+      setConversas(prev => prev.map(c => 
+        c.id === conversaSelecionada.id ? { ...c, status: 'encerrado' } : c
+      ));
+      
+      // Adicionar mensagem de sistema ao estado local
+      const msgSistemaEncerrar: Mensagem = {
+        id: `system-${Date.now()}`,
+        conversa_id: conversaSelecionada.id,
+        conteudo: `🔒 Atendimento encerrado por ${nomeUsuario}`,
+        direcao: 'saida',
+        tipo: 'sistema',
+        created_at: new Date().toISOString(),
+        enviada_por_ia: false,
+        enviada_por_dispositivo: false,
+        lida: true,
+        media_url: null,
+      };
+      setMensagens(prev => [...prev, msgSistemaEncerrar]);
     } catch (error) {
       toast.error('Erro ao encerrar atendimento');
     }
@@ -1025,8 +1105,26 @@ export default function Conversas() {
 
       toast.success('Conversa reaberta');
       setConversaSelecionada(prev => prev ? { ...prev, status: 'em_atendimento' } : null);
-      fetchConversas();
-      fetchMensagens(conversaSelecionada.id);
+      
+      // OTIMIZAÇÃO: Atualizar estado local - Realtime cuidará do resto
+      setConversas(prev => prev.map(c => 
+        c.id === conversaSelecionada.id ? { ...c, status: 'em_atendimento' } : c
+      ));
+      
+      // Adicionar mensagem de sistema ao estado local
+      const msgSistemaReabrir: Mensagem = {
+        id: `system-${Date.now()}`,
+        conversa_id: conversaSelecionada.id,
+        conteudo: `🔓 Conversa reaberta por ${nomeUsuario}`,
+        direcao: 'saida',
+        tipo: 'sistema',
+        created_at: new Date().toISOString(),
+        enviada_por_ia: false,
+        enviada_por_dispositivo: false,
+        lida: true,
+        media_url: null,
+      };
+      setMensagens(prev => [...prev, msgSistemaReabrir]);
     } catch (error) {
       toast.error('Erro ao reabrir conversa');
     }
@@ -1059,7 +1157,7 @@ export default function Conversas() {
       setAgenteParaTransferir(null);
       setEtapasAgenteIA([]);
       setConversaSelecionada(null);
-      fetchConversas();
+      // OTIMIZAÇÃO: Não chamar fetchConversas - Realtime cuidará do resto
     } catch (error) {
       console.error('Erro ao transferir:', error);
       toast.error('Erro ao transferir atendimento');
@@ -1105,94 +1203,127 @@ export default function Conversas() {
       }
     }
 
+    // OTIMIZAÇÃO: Adicionar mensagem otimista IMEDIATAMENTE
+    const tempId = `temp-file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const localPreviewUrl = URL.createObjectURL(file);
+    const mensagemOtimista: Mensagem = {
+      id: tempId,
+      conversa_id: conversaSelecionada.id,
+      conteudo: file.name,
+      direcao: 'saida',
+      tipo: fileType,
+      media_url: localPreviewUrl, // Preview local
+      created_at: new Date().toISOString(),
+      enviada_por_ia: false,
+      enviada_por_dispositivo: false,
+      lida: true,
+      _isOptimistic: true,
+      _sending: true,
+      _tempId: tempId,
+    };
+    
+    setMensagens(prev => [...prev, mensagemOtimista]);
     setUploading(true);
+    
     try {
-      // Converter arquivo para base64
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
+      // Upload para o storage EXTERNO
+      const fileName = `${Date.now()}-${file.name}`;
+      const { error: uploadError } = await storageClient.storage
+        .from('whatsapp-media')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      // Obter URL pública do Storage Externo
+      const { data: urlData } = storageClient.storage
+        .from('whatsapp-media')
+        .getPublicUrl(fileName);
+
+      const mediaUrl = urlData.publicUrl;
+
+      // Salvar mensagem no banco e pegar o ID
+      const { data: novaMensagemData } = await supabase.from('mensagens').insert({
+        conversa_id: conversaSelecionada.id,
+        usuario_id: usuario!.id,
+        conteudo: file.name,
+        direcao: 'saida',
+        tipo: fileType,
+        media_url: mediaUrl,
+        enviada_por_ia: false,
+      }).select('id').single();
       
-      reader.onloadend = async () => {
-        const base64Full = reader.result as string;
-        const base64Data = base64Full.split(',')[1];
-        
-        // Upload para o storage EXTERNO
-        const fileName = `${Date.now()}-${file.name}`;
-        const { error: uploadError } = await storageClient.storage
-          .from('whatsapp-media')
-          .upload(fileName, file);
+      // Atualizar mensagem otimista para mensagem real
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId 
+          ? { ...m, id: novaMensagemData?.id || tempId, media_url: mediaUrl, _sending: false, _isOptimistic: false } 
+          : m
+      ));
 
-        if (uploadError) throw uploadError;
-
-        // Obter URL pública do Storage Externo
-        const { data: urlData } = storageClient.storage
-          .from('whatsapp-media')
-          .getPublicUrl(fileName);
-
-        const mediaUrl = urlData.publicUrl;
-
-        // Salvar mensagem no banco e pegar o ID
-        const { data: novaMensagemData } = await supabase.from('mensagens').insert({
-          conversa_id: conversaSelecionada.id,
-          usuario_id: usuario!.id,
-          conteudo: file.name,
-          direcao: 'saida',
-          tipo: fileType,
-          media_url: mediaUrl,
-          enviada_por_ia: false,
-        }).select('id').single();
-
-        // Atualizar conversa - desativar IA e atribuir atendente humano
-        await supabase
-          .from('conversas')
-          .update({
-            ultima_mensagem: `📎 ${file.name}`,
-            ultima_mensagem_at: new Date().toISOString(),
-            agente_ia_ativo: false,
-            atendente_id: usuario!.id,
-          })
-          .eq('id', conversaSelecionada.id);
-
-        // Atualizar estado local
-        setConversaSelecionada(prev => prev ? {
-          ...prev,
+      // Atualizar conversa - desativar IA e atribuir atendente humano
+      await supabase
+        .from('conversas')
+        .update({
+          ultima_mensagem: `📎 ${file.name}`,
+          ultima_mensagem_at: new Date().toISOString(),
           agente_ia_ativo: false,
-          atendente_id: usuario!.id
-        } : null);
+          atendente_id: usuario!.id,
+        })
+        .eq('id', conversaSelecionada.id);
 
-        // Enviar via WhatsApp usando a conexão específica da conversa
-        const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
-        const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
-        if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
-          const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
-            body: {
-              conexao_id: conexaoIdToUse,
-              telefone: conversaSelecionada.contatos.telefone,
-              mensagem: '',
-              tipo: fileType,
-              media_url: mediaUrl,
-              grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
-              mensagem_id: novaMensagemData?.id,
-            },
-          });
+      // Atualizar estado local
+      setConversaSelecionada(prev => prev ? {
+        ...prev,
+        agente_ia_ativo: false,
+        atendente_id: usuario!.id
+      } : null);
+      
+      // Atualizar lista de conversas localmente
+      setConversas(prev => prev.map(c => 
+        c.id === conversaSelecionada.id 
+          ? { ...c, ultima_mensagem: `📎 ${file.name}`, ultima_mensagem_at: new Date().toISOString() }
+          : c
+      ).sort((a, b) => 
+        new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
+      ));
 
-          if (envioError) {
-            console.error('Erro ao enviar via WhatsApp:', envioError);
-            toast.warning('Arquivo salvo, mas erro ao enviar via WhatsApp');
-          }
+      // Enviar via WhatsApp usando a conexão específica da conversa
+      const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
+      const conexaoIdToUse = conversaSelecionada.conexao_id || conexaoDaConversa?.id;
+      if (conexaoIdToUse && conexaoDaConversa?.status === 'conectado') {
+        const { error: envioError } = await supabase.functions.invoke('enviar-mensagem', {
+          body: {
+            conexao_id: conexaoIdToUse,
+            telefone: conversaSelecionada.contatos.telefone,
+            mensagem: '',
+            tipo: fileType,
+            media_url: mediaUrl,
+            grupo_jid: conversaSelecionada.contatos.grupo_jid || undefined,
+            mensagem_id: novaMensagemData?.id,
+          },
+        });
+
+        if (envioError) {
+          console.error('Erro ao enviar via WhatsApp:', envioError);
+          toast.warning('Arquivo salvo, mas erro ao enviar via WhatsApp');
         }
+      }
 
-        fetchMensagens(conversaSelecionada.id);
-        fetchConversas();
-        toast.success('Arquivo enviado');
-        setUploading(false);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-      };
+      // OTIMIZAÇÃO: Não chamar fetchMensagens/fetchConversas - Realtime cuidará
+      toast.success('Arquivo enviado');
+      setUploading(false);
+      URL.revokeObjectURL(localPreviewUrl);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (error) {
       console.error('Erro ao enviar arquivo:', error);
+      // Marcar mensagem como erro
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId ? { ...m, _error: true, _sending: false } : m
+      ));
       toast.error('Erro ao enviar arquivo');
       setUploading(false);
+      URL.revokeObjectURL(localPreviewUrl);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -1208,17 +1339,39 @@ export default function Conversas() {
       if (!permitido) return;
     }
 
+    const durationFormatted = `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`;
+    
+    // OTIMIZAÇÃO: Adicionar mensagem otimista IMEDIATAMENTE
+    const tempId = `temp-audio-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const binaryString = atob(audioBase64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+    const localPreviewUrl = URL.createObjectURL(blob);
+    
+    const mensagemOtimista: Mensagem = {
+      id: tempId,
+      conversa_id: conversaSelecionada.id,
+      conteudo: `🎤 Áudio (${durationFormatted})`,
+      direcao: 'saida',
+      tipo: 'audio',
+      media_url: localPreviewUrl,
+      created_at: new Date().toISOString(),
+      enviada_por_ia: false,
+      enviada_por_dispositivo: false,
+      lida: true,
+      _isOptimistic: true,
+      _sending: true,
+      _tempId: tempId,
+    };
+    
+    setMensagens(prev => [...prev, mensagemOtimista]);
+
     try {
       // Determinar extensão baseada no mimeType
       const extension = mimeType === 'audio/mpeg' ? 'mp3' : mimeType === 'audio/ogg' ? 'ogg' : 'webm';
-      
-      // Converter base64 para blob para salvar no storage
-      const binaryString = atob(audioBase64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const blob = new Blob([bytes], { type: mimeType });
       
       // Upload para o storage EXTERNO
       const fileName = `${Date.now()}-audio.${extension}`;
@@ -1234,8 +1387,6 @@ export default function Conversas() {
         .getPublicUrl(fileName);
 
       const mediaUrl = urlData.publicUrl;
-      
-      const durationFormatted = `${Math.floor(duration / 60)}:${(duration % 60).toString().padStart(2, '0')}`;
 
       // Salvar mensagem no banco e pegar o ID
       const { data: novaMensagemData } = await supabase.from('mensagens').insert({
@@ -1247,6 +1398,13 @@ export default function Conversas() {
         media_url: mediaUrl,
         enviada_por_ia: false,
       }).select('id').single();
+      
+      // Atualizar mensagem otimista para mensagem real
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId 
+          ? { ...m, id: novaMensagemData?.id || tempId, media_url: mediaUrl, _sending: false, _isOptimistic: false } 
+          : m
+      ));
 
       // Atualizar conversa - desativar IA e atribuir atendente humano
       await supabase
@@ -1265,6 +1423,15 @@ export default function Conversas() {
         agente_ia_ativo: false,
         atendente_id: usuario!.id
       } : null);
+      
+      // Atualizar lista de conversas localmente
+      setConversas(prev => prev.map(c => 
+        c.id === conversaSelecionada.id 
+          ? { ...c, ultima_mensagem: `🎤 Áudio (${durationFormatted})`, ultima_mensagem_at: new Date().toISOString() }
+          : c
+      ).sort((a, b) => 
+        new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
+      ));
 
       // Enviar via WhatsApp - usar media_url já que o áudio está em formato MP3 compatível
       const conexaoDaConversa = getConexaoDaConversa(conversaSelecionada);
@@ -1288,12 +1455,17 @@ export default function Conversas() {
         }
       }
 
-      fetchMensagens(conversaSelecionada.id);
-      fetchConversas();
+      // OTIMIZAÇÃO: Não chamar fetchMensagens/fetchConversas - Realtime cuidará
       toast.success('Áudio enviado');
+      URL.revokeObjectURL(localPreviewUrl);
     } catch (error) {
       console.error('Erro ao enviar áudio:', error);
+      // Marcar mensagem como erro
+      setMensagens(prev => prev.map(m => 
+        m.id === tempId ? { ...m, _error: true, _sending: false } : m
+      ));
       toast.error('Erro ao enviar áudio');
+      URL.revokeObjectURL(localPreviewUrl);
     }
   };
 

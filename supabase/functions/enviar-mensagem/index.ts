@@ -10,6 +10,45 @@ const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 const META_API_URL = 'https://graph.facebook.com/v18.0';
 const INSTAGRAM_API_URL = 'https://graph.instagram.com/v18.0';
 
+// Função de retry com backoff exponencial para chamadas à Evolution API
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit, 
+  maxRetries: number = 3
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, options);
+      
+      // Se resposta OK ou erro de cliente (4xx), retorna imediatamente
+      if (response.ok || (response.status >= 400 && response.status < 500)) {
+        return response;
+      }
+      
+      // Erro 5xx - tentar novamente
+      console.log(`Tentativa ${attempt + 1} falhou com status ${response.status}, retentando...`);
+      
+      // Backoff exponencial: 1s, 2s, 4s
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      } else {
+        return response; // Última tentativa, retorna mesmo com erro
+      }
+    } catch (error) {
+      console.error(`Tentativa ${attempt + 1} falhou com erro:`, error);
+      lastError = error as Error;
+      
+      if (attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  
+  throw lastError || new Error('Todas as tentativas falharam');
+}
+
 // Função para fazer upload de mídia para Meta
 async function uploadMediaToMeta(
   mediaUrl: string,
@@ -489,7 +528,8 @@ serve(async (req) => {
 
     console.log('Chamando Evolution API:', { evolutionUrl, body });
     
-    const response = await fetch(evolutionUrl, {
+    // OTIMIZAÇÃO: Usar fetch com retry automático para erros temporários
+    const response = await fetchWithRetry(evolutionUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
