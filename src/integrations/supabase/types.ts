@@ -69,6 +69,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "agendamentos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
+          {
             foreignKeyName: "agendamentos_contato_id_fkey"
             columns: ["contato_id"]
             isOneToOne: false
@@ -170,6 +177,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_ia_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
         ]
       }
@@ -410,6 +424,13 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "api_keys_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
       atendente_config: {
@@ -535,6 +556,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "campos_personalizados_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
+          {
             foreignKeyName: "campos_personalizados_grupo_id_fkey"
             columns: ["grupo_id"]
             isOneToOne: false
@@ -575,6 +603,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campos_personalizados_grupos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
         ]
       }
@@ -643,6 +678,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conexoes_whatsapp_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
         ]
       }
@@ -837,6 +879,13 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "contatos_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
       conversas: {
@@ -925,6 +974,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
           {
             foreignKeyName: "conversas_contato_id_fkey"
@@ -1107,6 +1163,13 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "followup_regras_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
       followups_agendados: {
@@ -1195,6 +1258,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "funis_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
         ]
       }
@@ -1298,6 +1368,13 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "lembrete_regras_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
       logs_atividade: {
@@ -1337,6 +1414,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "logs_atividade_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
+          {
             foreignKeyName: "logs_atividade_usuario_id_fkey"
             columns: ["usuario_id"]
             isOneToOne: false
@@ -1347,6 +1431,7 @@ export type Database = {
       }
       mensagens: {
         Row: {
+          conta_id: string | null
           contato_id: string | null
           conteudo: string
           conversa_id: string
@@ -1365,6 +1450,7 @@ export type Database = {
           usuario_id: string | null
         }
         Insert: {
+          conta_id?: string | null
           contato_id?: string | null
           conteudo: string
           conversa_id: string
@@ -1383,6 +1469,7 @@ export type Database = {
           usuario_id?: string | null
         }
         Update: {
+          conta_id?: string | null
           contato_id?: string | null
           conteudo?: string
           conversa_id?: string
@@ -1401,6 +1488,20 @@ export type Database = {
           usuario_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "mensagens_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagens_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
           {
             foreignKeyName: "mensagens_contato_id_fkey"
             columns: ["contato_id"]
@@ -1431,6 +1532,69 @@ export type Database = {
           },
         ]
       }
+      mensagens_arquivo: {
+        Row: {
+          arquivada_em: string | null
+          conta_id: string | null
+          contato_id: string | null
+          conteudo: string
+          conversa_id: string
+          created_at: string
+          deletada: boolean | null
+          deletada_em: string | null
+          deletada_por: string | null
+          direcao: string
+          enviada_por_dispositivo: boolean | null
+          enviada_por_ia: boolean | null
+          id: string
+          lida: boolean | null
+          media_url: string | null
+          metadata: Json | null
+          tipo: string | null
+          usuario_id: string | null
+        }
+        Insert: {
+          arquivada_em?: string | null
+          conta_id?: string | null
+          contato_id?: string | null
+          conteudo: string
+          conversa_id: string
+          created_at: string
+          deletada?: boolean | null
+          deletada_em?: string | null
+          deletada_por?: string | null
+          direcao: string
+          enviada_por_dispositivo?: boolean | null
+          enviada_por_ia?: boolean | null
+          id: string
+          lida?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          tipo?: string | null
+          usuario_id?: string | null
+        }
+        Update: {
+          arquivada_em?: string | null
+          conta_id?: string | null
+          contato_id?: string | null
+          conteudo?: string
+          conversa_id?: string
+          created_at?: string
+          deletada?: boolean | null
+          deletada_em?: string | null
+          deletada_por?: string | null
+          direcao?: string
+          enviada_por_dispositivo?: boolean | null
+          enviada_por_ia?: boolean | null
+          id?: string
+          lida?: boolean | null
+          media_url?: string | null
+          metadata?: Json | null
+          tipo?: string | null
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
       mensagens_processadas: {
         Row: {
           conta_id: string
@@ -1460,6 +1624,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensagens_processadas_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
         ]
       }
@@ -1628,6 +1799,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "negociacoes_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
+          {
             foreignKeyName: "negociacoes_contato_id_fkey"
             columns: ["contato_id"]
             isOneToOne: false
@@ -1694,6 +1872,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notificacoes_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
           {
             foreignKeyName: "notificacoes_usuario_id_fkey"
@@ -1823,6 +2008,13 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tags_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
       transferencias_atendimento: {
@@ -1898,6 +2090,57 @@ export type Database = {
         }
         Relationships: []
       }
+      uso_historico: {
+        Row: {
+          conta_id: string
+          conversas_ativas: number | null
+          created_at: string | null
+          data: string
+          id: string
+          leads_novos: number | null
+          mensagens_enviadas: number | null
+          mensagens_recebidas: number | null
+          usuarios_ativos: number | null
+        }
+        Insert: {
+          conta_id: string
+          conversas_ativas?: number | null
+          created_at?: string | null
+          data: string
+          id?: string
+          leads_novos?: number | null
+          mensagens_enviadas?: number | null
+          mensagens_recebidas?: number | null
+          usuarios_ativos?: number | null
+        }
+        Update: {
+          conta_id?: string
+          conversas_ativas?: number | null
+          created_at?: string | null
+          data?: string
+          id?: string
+          leads_novos?: number | null
+          mensagens_enviadas?: number | null
+          mensagens_recebidas?: number | null
+          usuarios_ativos?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "uso_historico_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "contas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uso_historico_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
+        ]
+      }
       uso_tokens: {
         Row: {
           completion_tokens: number
@@ -1942,6 +2185,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "contas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "uso_tokens_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
           },
           {
             foreignKeyName: "uso_tokens_conversa_id_fkey"
@@ -1997,11 +2247,31 @@ export type Database = {
             referencedRelation: "contas"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "usuarios_conta_id_fkey"
+            columns: ["conta_id"]
+            isOneToOne: false
+            referencedRelation: "v_performance_conta"
+            referencedColumns: ["conta_id"]
+          },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      v_performance_conta: {
+        Row: {
+          ativo: boolean | null
+          conta_id: string | null
+          conta_nome: string | null
+          conversas_ativas: number | null
+          conversas_total: number | null
+          limite_mensagens_mes: number | null
+          plano_nome: string | null
+          total_contatos: number | null
+          total_usuarios: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       atendente_ver_todas: { Args: { _usuario_id: string }; Returns: boolean }
