@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Building2, LogOut, Settings, CreditCard, Wallet, Activity } from 'lucide-react';
+import { LayoutDashboard, Building2, LogOut, Settings, CreditCard, Wallet, Activity, Archive } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 
@@ -9,6 +9,7 @@ const menuItems = [
   { icon: CreditCard, label: 'Planos', path: '/admin/planos' },
   { icon: Wallet, label: 'Pagamentos', path: '/admin/pagamentos' },
   { icon: Activity, label: 'Performance', path: '/admin/performance' },
+  { icon: Archive, label: 'Histórico Arquivado', path: '/admin/historico-arquivado' },
 ];
 
 export default function AdminSidebar() {
