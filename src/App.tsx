@@ -32,6 +32,7 @@ import AdminContaDetalhe from "./pages/admin/AdminContaDetalhe";
 import AdminPlanos from "./pages/admin/AdminPlanos";
 import AdminPagamentos from "./pages/admin/AdminPagamentos";
 import AdminPerformance from "./pages/admin/AdminPerformance";
+import AdminHistoricoArquivado from "./pages/admin/AdminHistoricoArquivado";
 import Upgrade from "./pages/Upgrade";
 import MinhaAssinatura from "./pages/MinhaAssinatura";
 import Perfil from "./pages/Perfil";
@@ -118,6 +119,14 @@ function AppRoutes() {
           !user ? <Navigate to="/auth" replace /> :
           !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
           <AdminPerformance />
+        } 
+      />
+      <Route 
+        path="/admin/historico-arquivado" 
+        element={
+          !user ? <Navigate to="/auth" replace /> :
+          !usuario?.isSuperAdmin ? <Navigate to="/dashboard" replace /> :
+          <AdminHistoricoArquivado />
         } 
       />
       
