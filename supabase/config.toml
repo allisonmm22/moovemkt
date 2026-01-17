@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.consolidar-uso-diario]
 verify_jwt = false
+
+[functions.processar-followups-agendados]
+verify_jwt = false
