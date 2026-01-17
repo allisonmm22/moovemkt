@@ -19,7 +19,7 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'ir_etapa';
   valor?: string;
   calendario_id?: string;
 }
@@ -60,11 +60,11 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
   
   // Regex para ações com valor entre aspas (permite espaços)
   // Formato: @campo:nome-campo:"valor com espaços"
-  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup):([^\s@:]+):"([^"]+)"/gi;
+  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa):([^\s@:]+):"([^"]+)"/gi;
   
   // Regex para ações sem aspas (formato original, sem espaços no valor)
-  // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa
-  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
+  // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa ou @ir_etapa:numero
+  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
   
   // Primeiro, processar ações com aspas
   const matchesComAspas = [...texto.matchAll(regexComAspas)];
@@ -1268,29 +1268,40 @@ serve(async (req) => {
       promptCompleto += `Não mencione que recebeu o texto extraído do PDF. Aja como se tivesse lido o documento diretamente.\n`;
     }
 
+    // OTIMIZAÇÃO: Carregar APENAS etapa atual + próxima (evita regressão de fluxo)
     if (etapas && etapas.length > 0) {
-      promptCompleto += '\n\n## ETAPAS DE ATENDIMENTO\n';
-      promptCompleto += 'Siga estas etapas no fluxo de atendimento:\n\n';
-      etapas.forEach((etapa: any) => {
-        promptCompleto += `### Etapa ${etapa.numero}${etapa.tipo ? ` (${etapa.tipo})` : ''}: ${etapa.nome}\n`;
-        if (etapa.descricao) {
-          promptCompleto += `${etapa.descricao}\n\n`;
+      // Identificar etapa atual (pela coluna etapa_ia_atual ou fallback para etapa 1)
+      let etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
+      
+      // Se não há etapa definida, usar a primeira etapa (número 1)
+      if (!etapaAtual) {
+        etapaAtual = etapas.find((e: any) => e.numero === 1) || etapas[0];
+      }
+      
+      if (etapaAtual) {
+        promptCompleto += '\n\n## ETAPA ATUAL DE ATENDIMENTO\n';
+        promptCompleto += `**Você está na Etapa ${etapaAtual.numero}: ${etapaAtual.nome}**\n\n`;
+        promptCompleto += 'Siga RIGOROSAMENTE as instruções desta etapa. NÃO volte para etapas anteriores:\n\n';
+        if (etapaAtual.descricao) {
+          promptCompleto += `${etapaAtual.descricao}\n\n`;
         }
-      });
-
-      // Se há uma etapa específica definida para esta conversa, destacar como foco
-      if (etapaIAAtual) {
-        const etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
-        if (etapaAtual) {
-          console.log('Etapa IA atual definida:', etapaAtual.nome, '(número:', etapaAtual.numero + ')');
-          promptCompleto += '\n\n## ⚡ FOCO ATUAL - ETAPA ESPECÍFICA\n';
-          promptCompleto += `**IMPORTANTE:** Esta conversa foi iniciada especificamente na ETAPA ${etapaAtual.numero}: ${etapaAtual.nome}.\n`;
-          promptCompleto += `Você DEVE focar e priorizar as instruções desta etapa:\n`;
-          if (etapaAtual.descricao) {
-            promptCompleto += `\n${etapaAtual.descricao}\n`;
+        
+        // Adicionar próxima etapa para progressão natural
+        const proximaEtapa = etapas.find((e: any) => e.numero === etapaAtual.numero + 1);
+        if (proximaEtapa) {
+          promptCompleto += '\n### PRÓXIMA ETAPA (quando concluir a atual)\n';
+          promptCompleto += `Quando completar os objetivos da etapa atual, use a ação @ir_etapa:${proximaEtapa.numero} para avançar para:\n`;
+          promptCompleto += `**Etapa ${proximaEtapa.numero}: ${proximaEtapa.nome}**\n`;
+          if (proximaEtapa.descricao) {
+            // Mostrar apenas resumo da próxima etapa (primeiras 300 caracteres)
+            const resumo = proximaEtapa.descricao.substring(0, 300);
+            promptCompleto += `Resumo: ${resumo}${proximaEtapa.descricao.length > 300 ? '...' : ''}\n`;
           }
-          promptCompleto += `\nSiga rigorosamente o que está definido nesta etapa antes de prosseguir para outras etapas.\n`;
+        } else {
+          promptCompleto += '\n*Esta é a última etapa do fluxo de atendimento.*\n';
         }
+        
+        console.log('📍 Etapa atual no prompt:', etapaAtual.nome, '(número:', etapaAtual.numero, ')');
       }
     }
 
@@ -1307,6 +1318,7 @@ serve(async (req) => {
       promptCompleto += '\n\n## AÇÕES DISPONÍVEIS\n';
       promptCompleto += 'Você pode executar as seguintes ações quando apropriado:\n';
       promptCompleto += '- @etapa:<nome> - Mover o lead para uma etapa específica do CRM\n';
+      promptCompleto += '- @ir_etapa:<numero> - Avançar para uma etapa específica do fluxo de atendimento (ex: @ir_etapa:2 para ir para etapa 2)\n';
       promptCompleto += '- @tag:<nome> - Adicionar uma tag ao contato\n';
       promptCompleto += '- @negociacao:<funil/estagio> ou @negociacao:<funil/estagio>:<valor> - Criar uma nova negociação no CRM\n';
       promptCompleto += '- @transferir:humano - Transferir a conversa para um atendente humano\n';
@@ -1662,6 +1674,42 @@ serve(async (req) => {
           continue;
         }
         
+        // Processar ação @ir_etapa para avançar etapa no fluxo de atendimento
+        if (acao.tipo === 'ir_etapa' && acao.valor) {
+          const numeroEtapa = parseInt(acao.valor, 10);
+          if (!isNaN(numeroEtapa)) {
+            console.log('📍 [IR_ETAPA] Avançando para etapa número:', numeroEtapa);
+            
+            // Buscar a etapa pelo número
+            const { data: etapas } = await supabase
+              .from('agent_ia_etapas')
+              .select('id, nome, numero')
+              .eq('agent_ia_id', agente.id)
+              .eq('numero', numeroEtapa)
+              .limit(1);
+            
+            if (etapas && etapas.length > 0) {
+              const novaEtapa = etapas[0];
+              console.log('📍 [IR_ETAPA] Etapa encontrada:', novaEtapa.nome);
+              
+              // Atualizar a conversa com a nova etapa
+              const { error: updateError } = await supabase
+                .from('conversas')
+                .update({ etapa_ia_atual: novaEtapa.id })
+                .eq('id', conversa_id);
+              
+              if (updateError) {
+                console.error('📍 [IR_ETAPA] Erro ao atualizar etapa:', updateError);
+              } else {
+                console.log('📍 [IR_ETAPA] Etapa atualizada com sucesso para:', novaEtapa.nome);
+              }
+            } else {
+              console.log('📍 [IR_ETAPA] Etapa não encontrada para número:', numeroEtapa);
+            }
+          }
+          continue;
+        }
+        
         // 🔧 BLINDAGEM: Para ações de campo, substituir {valor-do-lead} ou valor vazio pela mensagem do lead
         let acaoCorrigida = { ...acao };
         if (acao.tipo === 'campo' && acao.valor) {
@@ -1731,7 +1779,7 @@ serve(async (req) => {
 
     // Limpar comandos @ que possam ter vazado para o texto da resposta
     let respostaFinal = result.resposta;
-    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|ir_etapa)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
     
     // Remover menções de transferência que possam ter escapado
