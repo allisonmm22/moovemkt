@@ -1,1 +1,7 @@
 project_id = "mfaxpkfpackofxklccyl"
+
+[functions.arquivar-mensagens-antigas]
+verify_jwt = false
+
+[functions.consolidar-uso-diario]
+verify_jwt = false
