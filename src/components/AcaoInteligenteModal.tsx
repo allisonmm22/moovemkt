@@ -172,8 +172,8 @@ const tiposAcao: AcaoTipo[] = [
     label: 'Verificar Cliente',
     description: 'Consulta se o lead é cliente no CRM',
     icon: UserCheck,
-    color: 'hsl(var(--chart-2))',
-    bgColor: 'hsl(var(--chart-2) / 0.1)',
+    color: 'hsl(150 80% 40%)',
+    bgColor: 'hsl(150 80% 40% / 0.1)',
   },
 ];
 
