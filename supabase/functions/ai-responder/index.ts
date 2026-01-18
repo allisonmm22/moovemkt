@@ -1217,24 +1217,32 @@ serve(async (req) => {
       promptCompleto += `\n**IMPORTANTE:** Use o nome "${dadosContato.nome || 'Cliente'}" para se referir ao contato de forma personalizada quando apropriado.\n`;
     }
 
-    // Adicionar contexto do CRM se disponível
+    // Adicionar contexto do CRM - SEMPRE informar status de cliente
+    promptCompleto += `\n\n## CONTEXTO DO CRM\n`;
+    if (crmContexto?.is_cliente) {
+      promptCompleto += `**⭐ ESTE LEAD É CLIENTE - SIGA INSTRUÇÕES PARA CLIENTE**\n`;
+      promptCompleto += `- Status: Cliente (já convertido)\n`;
+      promptCompleto += `- Trate este contato como um cliente existente, não como um novo lead.\n`;
+      promptCompleto += `- Seja mais familiar e personalizado no atendimento.\n`;
+    } else if (crmContexto && !crmContexto.is_cliente) {
+      promptCompleto += `**📋 ESTE LEAD NÃO É CLIENTE - SIGA INSTRUÇÕES PARA NÃO CLIENTE**\n`;
+      promptCompleto += `- Status: Lead em negociação (ainda não é cliente)\n`;
+      promptCompleto += `- Se houver instrução condicional para "não cliente", você DEVE seguir essa instrução.\n`;
+    } else {
+      promptCompleto += `**🆕 ESTE LEAD NÃO É CLIENTE - SIGA INSTRUÇÕES PARA NÃO CLIENTE**\n`;
+      promptCompleto += `- Status: Contato novo ou sem negociação ativa\n`;
+      promptCompleto += `- Este contato NÃO é cliente.\n`;
+      promptCompleto += `- Se houver instrução condicional para "não cliente", você DEVE seguir essa instrução.\n`;
+    }
+    
     if (crmContexto) {
-      promptCompleto += `\n\n## CONTEXTO DO CRM\n`;
-      if (crmContexto.is_cliente) {
-        promptCompleto += `**⭐ ESTE É UM CLIENTE ATIVO!**\n`;
-        promptCompleto += `- Status: Cliente (já convertido)\n`;
-        promptCompleto += `- Trate este contato como um cliente existente, não como um novo lead.\n`;
-        promptCompleto += `- Seja mais familiar e personalizado no atendimento.\n`;
-      } else {
-        promptCompleto += `- Status: Lead em negociação\n`;
-      }
       promptCompleto += `- Etapa atual no CRM: ${crmContexto.estagio_nome || 'Não definida'}\n`;
       promptCompleto += `- Funil: ${crmContexto.funil_nome || 'Não definido'}\n`;
       if (crmContexto.negociacao_valor && crmContexto.negociacao_valor > 0) {
         promptCompleto += `- Valor da negociação: R$ ${crmContexto.negociacao_valor.toLocaleString('pt-BR')}\n`;
       }
-      promptCompleto += `\nUse estas informações para contextualizar melhor o atendimento.\n`;
     }
+    promptCompleto += `\nUse estas informações para contextualizar melhor o atendimento.\n`;
 
     // Adicionar contexto de mídia se for áudio com transcrição
     if (mensagem_tipo === 'audio' && transcricao) {
@@ -1290,6 +1298,14 @@ serve(async (req) => {
       if (etapaAtual) {
         promptCompleto += '\n\n## ETAPA ATUAL DE ATENDIMENTO\n';
         promptCompleto += `**Você está na Etapa ${etapaAtual.numero}: ${etapaAtual.nome}**\n\n`;
+        
+        // Adicionar contexto EXPLÍCITO sobre status de cliente para instruções condicionais
+        if (crmContexto?.is_cliente) {
+          promptCompleto += '**⚠️ IMPORTANTE: O LEAD É CLIENTE - Execute instruções para CLIENTE**\n\n';
+        } else {
+          promptCompleto += '**⚠️ IMPORTANTE: O LEAD NÃO É CLIENTE - Execute instruções para NÃO CLIENTE**\n\n';
+        }
+        
         promptCompleto += 'Siga RIGOROSAMENTE as instruções desta etapa. NÃO volte para etapas anteriores:\n\n';
         if (etapaAtual.descricao) {
           promptCompleto += `${etapaAtual.descricao}\n\n`;
