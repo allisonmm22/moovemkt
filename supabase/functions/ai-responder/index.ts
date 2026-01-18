@@ -1986,6 +1986,14 @@ serve(async (req) => {
       promptNovaEtapa += `- Se houver @transferir nas instruções da etapa, execute-a MAS responda APENAS com a mensagem natural especificada.\n`;
       promptNovaEtapa += `- Sua resposta deve ser APENAS a mensagem natural ao cliente, sem mencionar nenhuma ação de sistema.\n\n`;
       
+      // REGRA DE MENSAGEM LITERAL
+      promptNovaEtapa += `## ⚠️ REGRA DE MENSAGEM LITERAL - MUITO IMPORTANTE\n`;
+      promptNovaEtapa += `- Quando o prompt especificar uma mensagem entre aspas (ex: "Oi, [nome] tudo bem Dr?"), você DEVE usar esse texto EXATAMENTE.\n`;
+      promptNovaEtapa += `- NÃO modifique, NÃO remova palavras, NÃO "melhore" a mensagem.\n`;
+      promptNovaEtapa += `- Apenas substitua os placeholders como [nome do lead] ou [nome] pelo nome real do contato.\n`;
+      promptNovaEtapa += `- Se o prompt diz: Mensagem: "Oi, [nome] Dr?" → você DEVE responder: "Oi, João Dr?" (se o nome for João)\n`;
+      promptNovaEtapa += `- COPIE LITERALMENTE o texto entre aspas, incluindo TODAS as palavras sem exceção.\n\n`;
+      
       promptNovaEtapa += `## ETAPA ATUAL DE ATENDIMENTO\n`;
       promptNovaEtapa += `**Você está na Etapa ${novaEtapaExecutada.numero}: ${novaEtapaExecutada.nome}**\n\n`;
       promptNovaEtapa += `### Instruções desta etapa:\n${novaEtapaExecutada.descricao}\n`;
@@ -2011,7 +2019,7 @@ serve(async (req) => {
           // Mensagens para a nova chamada
           const mensagensNovaEtapa = [
             { role: 'system', content: promptNovaEtapa },
-            { role: 'user', content: 'Inicie o atendimento desta nova etapa de forma natural, seguindo as instruções acima.' }
+            { role: 'user', content: 'Envie EXATAMENTE a mensagem especificada entre aspas nas instruções da etapa, substituindo apenas placeholders como [nome do lead] ou [nome] pelo nome real do contato. NÃO modifique, NÃO remova e NÃO altere nenhuma palavra da mensagem original.' }
           ];
           
           console.log('🔄 [IR_ETAPA] Fazendo nova chamada à IA para gerar resposta da nova etapa...');
