@@ -302,6 +302,27 @@ serve(async (req) => {
         }
 
         if (!conversa) {
+          // Buscar agente principal da conta para associar à conversa
+          const agenteResponse = await fetch(
+            `${supabaseUrl}/rest/v1/agent_ia?conta_id=eq.${conexao.conta_id}&tipo=eq.principal&ativo=eq.true&select=id&limit=1`,
+            {
+              headers: {
+                'apikey': supabaseKey,
+                'Authorization': `Bearer ${supabaseKey}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
+
+          let agentePrincipalId: string | null = null;
+          if (agenteResponse.ok) {
+            const agenteData = await agenteResponse.json();
+            if (Array.isArray(agenteData) && agenteData.length > 0) {
+              agentePrincipalId = agenteData[0].id;
+              console.log('Agente principal encontrado:', agentePrincipalId);
+            }
+          }
+
           const insertResponse = await fetch(
             `${supabaseUrl}/rest/v1/conversas`,
             {
@@ -316,7 +337,8 @@ serve(async (req) => {
                 conta_id: conexao.conta_id,
                 contato_id: contato!.id,
                 conexao_id: conexao.id,
-                agente_ia_ativo: true,
+                agente_ia_ativo: !!agentePrincipalId,
+                agente_ia_id: agentePrincipalId,
                 status: 'em_atendimento',
               }),
             }
