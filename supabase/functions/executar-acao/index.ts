@@ -490,56 +490,67 @@ serve(async (req) => {
               const mensagemJaSalva = aiResult.mensagem_ja_salva || aiResult.mensagemJaSalva;
               
               if (aiResult.resposta && aiResult.should_respond && !mensagemJaSalva) {
-                // Buscar conexão e contato para enviar via WhatsApp
+                // Buscar conexão e contato (incluindo telefone) para enviar via WhatsApp
                 const { data: conversaData } = await supabase
                   .from('conversas')
-                  .select('conexao_id, contato_id')
+                  .select('conexao_id, contato_id, contatos(telefone)')
                   .eq('id', conversa_id)
                   .single();
                 
                 if (conversaData) {
-                  // Salvar mensagem no banco
-                  await supabase
-                    .from('mensagens')
-                    .insert({
-                      conversa_id,
-                      conteudo: aiResult.resposta,
-                      direcao: 'saida',
-                      tipo: 'texto',
-                      enviada_por_ia: true,
-                    });
+                  // Extrair telefone do contato (pode ser array ou objeto dependendo da resposta)
+                  const contatoData = conversaData.contatos as any;
+                  const telefoneContato = Array.isArray(contatoData) 
+                    ? contatoData[0]?.telefone 
+                    : contatoData?.telefone;
                   
-                  // Atualizar última mensagem da conversa
-                  await supabase
-                    .from('conversas')
-                    .update({ 
-                      ultima_mensagem: aiResult.resposta.substring(0, 100),
-                      ultima_mensagem_at: new Date().toISOString(),
-                    })
-                    .eq('id', conversa_id);
-                  
-                  // Usar enviar-mensagem para garantir compatibilidade com todos os provedores
-                  const enviarMensagemUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/enviar-mensagem`;
-                  const enviarResponse = await fetch(enviarMensagemUrl, {
-                    method: 'POST',
-                    headers: {
-                      'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      conexao_id: conversaData.conexao_id,
-                      conversa_id,
-                      contato_id: conversaData.contato_id,
-                      mensagem: aiResult.resposta,
-                      tipo: 'texto',
-                    }),
-                  });
-                  
-                  if (enviarResponse.ok) {
-                    console.log('✅ Resposta do novo agente enviada com sucesso!');
+                  if (!telefoneContato) {
+                    console.error('❌ Telefone do contato não encontrado para enviar mensagem do novo agente');
                   } else {
-                    const enviarError = await enviarResponse.text();
-                    console.error('❌ Erro ao enviar resposta:', enviarError);
+                    // Salvar mensagem no banco
+                    await supabase
+                      .from('mensagens')
+                      .insert({
+                        conversa_id,
+                        conteudo: aiResult.resposta,
+                        direcao: 'saida',
+                        tipo: 'texto',
+                        enviada_por_ia: true,
+                      });
+                    
+                    // Atualizar última mensagem da conversa
+                    await supabase
+                      .from('conversas')
+                      .update({ 
+                        ultima_mensagem: aiResult.resposta.substring(0, 100),
+                        ultima_mensagem_at: new Date().toISOString(),
+                      })
+                      .eq('id', conversa_id);
+                    
+                    // Usar enviar-mensagem para garantir compatibilidade com todos os provedores
+                    const enviarMensagemUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/enviar-mensagem`;
+                    console.log('📤 Enviando mensagem do novo agente para telefone:', telefoneContato);
+                    
+                    const enviarResponse = await fetch(enviarMensagemUrl, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        conexao_id: conversaData.conexao_id,
+                        telefone: telefoneContato,
+                        mensagem: aiResult.resposta,
+                        tipo: 'texto',
+                      }),
+                    });
+                    
+                    if (enviarResponse.ok) {
+                      console.log('✅ Resposta do novo agente enviada com sucesso!');
+                    } else {
+                      const enviarError = await enviarResponse.text();
+                      console.error('❌ Erro ao enviar resposta:', enviarError);
+                    }
                   }
                 }
               } else if (mensagemJaSalva) {
