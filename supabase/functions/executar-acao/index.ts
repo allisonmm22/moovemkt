@@ -981,7 +981,16 @@ serve(async (req) => {
         
         const partes = acaoObj.valor.split(':');
         const nomeCampoRaw = partes[0] || '';
-        const valorCampo = partes.slice(1).join(':').trim(); // Para permitir ":" no valor
+        let valorCampo = partes.slice(1).join(':').trim(); // Para permitir ":" no valor
+        
+        // CORREÇÃO: Detectar se o valor tem padrão de "Nome-Sobrenome-Outro" (hífens entre palavras capitalizadas)
+        // e converter de volta para espaços (a IA às vezes adiciona hífens por engano)
+        const padraoNomeComHifens = /^[A-ZÀ-ÿ][a-zà-ÿ]+(-[A-ZÀ-ÿ][a-zà-ÿ]+)+$/;
+        if (padraoNomeComHifens.test(valorCampo)) {
+          const valorOriginal = valorCampo;
+          valorCampo = valorCampo.replace(/-/g, ' ');
+          console.log(`🔄 [CAMPO] Valor convertido de "${valorOriginal}" para "${valorCampo}" (hífens → espaços)`);
+        }
         
         // Normalizar nome do campo: lowercase, trocar hífens por espaços, remover pontuação
         const nomeCampo = nomeCampoRaw

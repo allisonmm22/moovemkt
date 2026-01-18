@@ -1489,11 +1489,15 @@ serve(async (req) => {
         
         promptCompleto += '\n**COMO SALVAR CAMPOS:**\n';
         promptCompleto += '1. Quando o lead enviar uma informação que corresponde a um campo acima, SALVE imediatamente\n';
-        promptCompleto += '2. Use o formato: @campo:nome-do-campo:{exatamente-o-que-o-lead-enviou}\n';
-        promptCompleto += '3. Substitua espaços por hífens no nome do campo\n';
-        promptCompleto += '4. Mantenha o valor EXATAMENTE como o lead enviou\n\n';
+        promptCompleto += '2. Use o formato: @campo:nome-do-campo:valor do lead (COM ESPAÇOS!)\n';
+        promptCompleto += '3. Substitua espaços por hífens APENAS no NOME do campo (antes do segundo ":")\n';
+        promptCompleto += '4. O VALOR (depois do segundo ":") deve MANTER ESPAÇOS - NÃO troque espaços por hífens no valor!\n';
+        promptCompleto += '5. NUNCA use hífens no valor, mantenha EXATAMENTE como o lead enviou\n\n';
         
         promptCompleto += '**EXEMPLOS PRÁTICOS:**\n';
+        promptCompleto += '- Lead diz: "Thiago Mendes Penter" (nome)\n';
+        promptCompleto += '  → CORRETO: @campo:nome-completo:Thiago Mendes Penter (espaços preservados no valor!)\n';
+        promptCompleto += '  → ERRADO: @campo:nome-completo:Thiago-Mendes-Penter (NÃO use hífens no valor!)\n';
         promptCompleto += '- Lead diz: "meu email é teste@gmail.com"\n';
         promptCompleto += '  → Você usa: @campo:email:teste@gmail.com\n';
         promptCompleto += '- Lead diz: "22/02/1994"\n';
@@ -1680,7 +1684,7 @@ serve(async (req) => {
               },
               valor: {
                 type: 'string',
-                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead. Para "verificar_cliente": não precisa de valor. Para "ir_etapa": número da etapa (ex: "2").',
+                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor com espaços" (hífens SÓ no nome do campo, NUNCA no valor! Ex: nome-completo:João da Silva). Para "nome": nome completo do lead. Para "verificar_cliente": não precisa de valor. Para "ir_etapa": número da etapa (ex: "2").',
               },
             },
             required: ['tipo'],
