@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect, useState, useMemo, memo, forwardRef } from 'react';
-import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus, FileEdit, FileSearch } from 'lucide-react';
+import { Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, Handshake, X, CalendarSearch, CalendarPlus, FileEdit, FileSearch, ArrowRightCircle } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface DescricaoEditorProps {
@@ -180,6 +180,14 @@ function parseAcao(acao: string): ChipConfig {
       colorClass: 'text-cyan-700 dark:text-cyan-400',
       bgClass: 'bg-cyan-100 dark:bg-cyan-900/40 border-cyan-300 dark:border-cyan-700',
     };
+  } else if (acaoLower.startsWith('@ir_etapa:')) {
+    const valor = acao.replace(/^@ir_etapa:/i, '');
+    config = {
+      icon: ArrowRightCircle,
+      label: `Ir para Etapa: ${valor}`,
+      colorClass: 'text-purple-700 dark:text-purple-400',
+      bgClass: 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700',
+    };
   } else {
     config = {
       icon: Tag,
@@ -249,7 +257,7 @@ const SHARED_STYLES: React.CSSProperties = {
 };
 
 // Regex pattern for matching actions
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter)(:[^\s@<>.,;!?]+)?/gi;
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter|ir_etapa)(:[^\s@<>.,;!?]+)?/gi;
 
 export function DescricaoEditor({ value, onChange, placeholder, onAcaoClick, onCursorChange }: DescricaoEditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
