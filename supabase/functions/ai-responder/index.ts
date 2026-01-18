@@ -1273,9 +1273,18 @@ serve(async (req) => {
       // Identificar etapa atual (pela coluna etapa_ia_atual ou fallback para etapa 1)
       let etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
       
-      // Se não há etapa definida, usar a primeira etapa (número 1)
+      // Se não há etapa definida, usar a primeira etapa (número 1) E PERSISTIR NA CONVERSA
       if (!etapaAtual) {
         etapaAtual = etapas.find((e: any) => e.numero === 1) || etapas[0];
+        
+        // Persistir a etapa inicial na conversa para exibição no frontend
+        if (etapaAtual) {
+          await supabase
+            .from('conversas')
+            .update({ etapa_ia_atual: etapaAtual.id })
+            .eq('id', conversa_id);
+          console.log('📍 [INICIALIZAR] Definindo etapa inicial na conversa:', etapaAtual.nome);
+        }
       }
       
       if (etapaAtual) {
