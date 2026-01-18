@@ -885,9 +885,12 @@ async function callOpenAI(
       }
       
       // Segunda chamada para obter resposta textual com os resultados
+      // IMPORTANTE: Incluir tools para permitir que a IA chame novas ações após receber resultado
       const continuationBody: any = {
         model: modelo,
         messages: toolResultMessages,
+        tools: tools,
+        tool_choice: forcarFerramentaAgenda ? 'required' : 'auto',
       };
       
       if (isModeloNovo) {
@@ -909,8 +912,26 @@ async function callOpenAI(
         
         if (continuationResponse.ok) {
           const continuationData = await continuationResponse.json();
-          resposta = continuationData.choices?.[0]?.message?.content || '';
+          const continuationMessage = continuationData.choices?.[0]?.message;
+          resposta = continuationMessage?.content || '';
           console.log('Resposta da continuação:', resposta.substring(0, 100));
+          
+          // Verificar se há novas tool_calls na continuação (ex: ir_etapa após verificar_cliente)
+          const newToolCalls = continuationMessage?.tool_calls;
+          if (newToolCalls && newToolCalls.length > 0) {
+            console.log('🔧 [CONTINUAÇÃO] Novas ações detectadas:', newToolCalls.length);
+            for (const toolCall of newToolCalls) {
+              if (toolCall.function?.name === 'executar_acao') {
+                try {
+                  const args = JSON.parse(toolCall.function.arguments);
+                  console.log('🔧 [CONTINUAÇÃO] Ação adicional:', args.tipo, args.valor || '');
+                  acoes.push(args);
+                } catch (e) {
+                  console.error('Erro ao parsear ação da continuação:', e);
+                }
+              }
+            }
+          }
         }
       } catch (e) {
         console.error('Erro na segunda chamada OpenAI:', e);
@@ -1642,12 +1663,12 @@ serve(async (req) => {
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup', 'verificar_cliente'],
-                description: 'Tipo da ação. IMPORTANTE - DIFERENÇA ENTRE FOLLOWUP E AGENDA: Use "followup" para LEMBRETE de retorno (lead disse "me liga amanhã", "fala comigo mais tarde", etc - NÃO precisa consultar calendário!). Use "agenda" para REUNIÃO com horário marcado e link de meet (lead quer consulta/reunião - PRECISA consultar disponibilidade primeiro). Se você perguntou "quando retomo o contato" e lead deu horário, é FOLLOW-UP! Use "verificar_cliente" para verificar no CRM se o lead é um cliente existente (etapa marcada como tipo cliente).',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup', 'verificar_cliente', 'ir_etapa'],
+                description: 'Tipo da ação. IMPORTANTE - DIFERENÇA ENTRE FOLLOWUP E AGENDA: Use "followup" para LEMBRETE de retorno (lead disse "me liga amanhã", "fala comigo mais tarde", etc - NÃO precisa consultar calendário!). Use "agenda" para REUNIÃO com horário marcado e link de meet (lead quer consulta/reunião - PRECISA consultar disponibilidade primeiro). Se você perguntou "quando retomo o contato" e lead deu horário, é FOLLOW-UP! Use "verificar_cliente" para verificar no CRM se o lead é um cliente existente (etapa marcada como tipo cliente). Use "ir_etapa" para avançar o lead para outra etapa do fluxo de atendimento.',
               },
               valor: {
                 type: 'string',
-                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead. Para "verificar_cliente": não precisa de valor.',
+                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead. Para "verificar_cliente": não precisa de valor. Para "ir_etapa": número da etapa (ex: "2").',
               },
             },
             required: ['tipo'],
@@ -1749,23 +1770,32 @@ serve(async (req) => {
       
       // BLINDAGEM: Se há mais de 3 ações, provavelmente é um erro do agente
       // Filtrar para executar apenas ações prioritárias
+      // IMPORTANTE: Não contar ações já executadas no tool-calling (agenda, verificar_cliente)
+      const acoesJaExecutadas = ['agenda', 'verificar_cliente'];
+      const acoesExecutaveis = result.acoes.filter(a => !acoesJaExecutadas.includes(a.tipo));
       let acoesParaExecutar = result.acoes;
       
-      if (result.acoes.length > 3) {
-        console.log('⚠️ [BLINDAGEM] Agente tentou executar', result.acoes.length, 'ações de uma vez!');
+      console.log('📊 [AÇÕES] Total:', result.acoes.length, '| Executáveis:', acoesExecutaveis.length);
+      console.log('📊 [AÇÕES] Tipos:', result.acoes.map(a => a.tipo).join(', '));
+      
+      // Só aplicar blindagem se houver mais de 3 ações EXECUTÁVEIS (não conta as já processadas)
+      if (acoesExecutaveis.length > 3) {
+        console.log('⚠️ [BLINDAGEM] Agente tentou executar', acoesExecutaveis.length, 'ações executáveis de uma vez!');
         console.log('Ações detectadas:', result.acoes.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
         
-        // Priorizar: followup > agenda > transferir > finalizar
-        const prioridade = ['followup', 'agenda', 'transferir', 'finalizar'];
-        const acaoPrioritaria = result.acoes.find(a => prioridade.includes(a.tipo));
+        // Priorizar: ir_etapa > followup > agenda > transferir > finalizar
+        const prioridade = ['ir_etapa', 'followup', 'agenda', 'transferir', 'finalizar'];
+        const acaoPrioritaria = acoesExecutaveis.find(a => prioridade.includes(a.tipo));
         
         if (acaoPrioritaria) {
-          acoesParaExecutar = [acaoPrioritaria];
-          console.log('✅ [BLINDAGEM] Executando apenas ação prioritária:', acaoPrioritaria.tipo);
+          // Manter as ações já executadas + a prioritária
+          acoesParaExecutar = [...result.acoes.filter(a => acoesJaExecutadas.includes(a.tipo)), acaoPrioritaria];
+          console.log('✅ [BLINDAGEM] Executando ação prioritária:', acaoPrioritaria.tipo);
         } else {
-          // Se não há ação prioritária, pegar apenas a última (mais recente)
-          acoesParaExecutar = [result.acoes[result.acoes.length - 1]];
-          console.log('✅ [BLINDAGEM] Executando apenas última ação:', acoesParaExecutar[0].tipo);
+          // Se não há ação prioritária, pegar as já executadas + a última executável
+          const ultimaExecutavel = acoesExecutaveis[acoesExecutaveis.length - 1];
+          acoesParaExecutar = [...result.acoes.filter(a => acoesJaExecutadas.includes(a.tipo)), ultimaExecutavel];
+          console.log('✅ [BLINDAGEM] Executando última ação:', ultimaExecutavel.tipo);
         }
         
         // Logar esse comportamento problemático
@@ -1773,10 +1803,10 @@ serve(async (req) => {
           await supabase.from('logs_atividade').insert({
             conta_id,
             tipo: 'erro_ia_acoes_em_lote',
-            descricao: `Agente tentou executar ${result.acoes.length} ações de uma vez`,
+            descricao: `Agente tentou executar ${acoesExecutaveis.length} ações de uma vez`,
             metadata: {
               acoes_originais: result.acoes.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
-              acao_executada: { tipo: acoesParaExecutar[0].tipo, valor: acoesParaExecutar[0].valor?.substring(0, 100) },
+              acoes_executadas: acoesParaExecutar.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
               mensagem_cliente: mensagem?.substring(0, 200),
             },
           });
