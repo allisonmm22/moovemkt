@@ -1977,6 +1977,15 @@ serve(async (req) => {
       promptNovaEtapa += `O lead acabou de ser transferido para esta nova etapa de atendimento.\n`;
       promptNovaEtapa += `Você DEVE iniciar o atendimento seguindo as instruções específicas desta etapa.\n`;
       promptNovaEtapa += `NÃO repita informações sobre etapas anteriores.\n\n`;
+      
+      // REGRAS CRÍTICAS DE AÇÕES SILENCIOSAS
+      promptNovaEtapa += `## ⚠️ REGRAS CRÍTICAS - AÇÕES SILENCIOSAS\n`;
+      promptNovaEtapa += `- NUNCA mencione ao cliente que está transferindo, mudando etapa ou executando ações internas.\n`;
+      promptNovaEtapa += `- NUNCA diga "vou transferir", "estou te transferindo", "processando sua solicitação".\n`;
+      promptNovaEtapa += `- As ações @transferir, @etapa, @tag são executadas SILENCIOSAMENTE - o cliente não deve saber.\n`;
+      promptNovaEtapa += `- Se houver @transferir nas instruções da etapa, execute-a MAS responda APENAS com a mensagem natural especificada.\n`;
+      promptNovaEtapa += `- Sua resposta deve ser APENAS a mensagem natural ao cliente, sem mencionar nenhuma ação de sistema.\n\n`;
+      
       promptNovaEtapa += `## ETAPA ATUAL DE ATENDIMENTO\n`;
       promptNovaEtapa += `**Você está na Etapa ${novaEtapaExecutada.numero}: ${novaEtapaExecutada.nome}**\n\n`;
       promptNovaEtapa += `### Instruções desta etapa:\n${novaEtapaExecutada.descricao}\n`;
@@ -2013,7 +2022,7 @@ serve(async (req) => {
             modelo,
             agente.max_tokens || 500,
             agente.temperatura || 0.7,
-            undefined, // sem tools - apenas texto
+            tools, // COM tools para executar ações como @transferir
             undefined,
             undefined,
             undefined
@@ -2023,6 +2032,41 @@ serve(async (req) => {
             console.log('✅ [IR_ETAPA] Nova resposta gerada:', novaResposta.resposta.substring(0, 100));
             // Substituir resposta original pela nova resposta
             result.resposta = novaResposta.resposta;
+            
+            // Processar ações retornadas pela segunda chamada (ex: @transferir)
+            if (novaResposta.acoes && novaResposta.acoes.length > 0) {
+              console.log('📊 [IR_ETAPA] Ações da nova etapa:', novaResposta.acoes.map(a => a.tipo).join(', '));
+              
+              for (const acao of novaResposta.acoes) {
+                // Adicionar às ações do resultado para serem processadas
+                if (!result.acoes) result.acoes = [];
+                result.acoes.push(acao);
+                
+                // Se for transferir, executar imediatamente
+                if (acao.tipo === 'transferir') {
+                  console.log('🔄 [IR_ETAPA] Executando @transferir imediatamente...');
+                  try {
+                    const responseAcao = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        acao: acao,
+                        conversa_id: conversa_id,
+                        contato_id: contatoId,
+                        conta_id: conta_id,
+                      }),
+                    });
+                    const resultadoAcao = await responseAcao.json();
+                    console.log('✅ [IR_ETAPA] Ação transferir executada:', resultadoAcao);
+                  } catch (errAcao) {
+                    console.error('❌ [IR_ETAPA] Erro ao executar transferir:', errAcao);
+                  }
+                }
+              }
+            }
           } else {
             console.log('⚠️ [IR_ETAPA] Nova resposta muito curta, mantendo original');
           }
@@ -2040,8 +2084,14 @@ serve(async (req) => {
     respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|ir_etapa)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
     
-    // Remover menções de transferência que possam ter escapado
+    // Remover menções de transferência que possam ter escapado (reforçado)
     respostaFinal = respostaFinal.replace(/estou transferindo.*?(humano|agente|atendente).*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/vou transferir.*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/estou (te )?transferindo.*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/já estou transferindo.*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/processando sua (solicitação|transferência).*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/sua solicitação.*?transferida.*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/transferindo (você|sua conversa|seu atendimento).*?\./gi, '').trim();
     
     // Remover mensagens de sistema que a IA possa ter gerado (confirmações de ações)
     respostaFinal = respostaFinal.replace(/^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)\s*Campo\s*"[^"]+"\s*atualizado\s*(para\s*)?"[^"]+"\s*\.?\s*/gi, '').trim();
