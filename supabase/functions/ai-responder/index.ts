@@ -1711,6 +1711,29 @@ serve(async (req) => {
                 console.error('📍 [IR_ETAPA] Erro ao atualizar etapa:', updateError);
               } else {
                 console.log('📍 [IR_ETAPA] Etapa atualizada com sucesso para:', novaEtapa.nome);
+                
+                // Registrar mensagem de sistema para rastreamento histórico
+                await supabase
+                  .from('mensagens')
+                  .insert({
+                    conversa_id,
+                    conta_id: conta_id,
+                    conteudo: `📍 Lead avançou para Etapa ${novaEtapa.numero}: ${novaEtapa.nome}`,
+                    direcao: 'saida',
+                    tipo: 'sistema',
+                    enviada_por_ia: true,
+                    metadata: { 
+                      interno: true, 
+                      acao_tipo: 'ir_etapa',
+                      etapa_ia_id: novaEtapa.id,
+                      etapa_nome: novaEtapa.nome,
+                      etapa_numero: novaEtapa.numero,
+                      executado_por: 'agente_ia',
+                      agente_id: agente.id,
+                    }
+                  });
+                
+                console.log('📍 [IR_ETAPA] Mensagem de rastreamento registrada');
               }
             } else {
               console.log('📍 [IR_ETAPA] Etapa não encontrada para número:', numeroEtapa);
