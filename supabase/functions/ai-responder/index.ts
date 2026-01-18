@@ -1993,8 +1993,9 @@ serve(async (req) => {
         promptNovaEtapa += `- Estágio: ${crmContexto.estagio_nome || 'N/A'}\n`;
       }
       
-      // Buscar API key para fazer nova chamada
-      const apiKeyToUse = agente.openai_api_key || Deno.env.get('OPENAI_API_KEY') || Deno.env.get('LOVABLE_API_KEY');
+      // Usar a mesma API key da conta que funcionou na chamada principal
+      const apiKeyToUse = conta?.openai_api_key || Deno.env.get('OPENAI_API_KEY') || Deno.env.get('LOVABLE_API_KEY');
+      console.log('🔄 [IR_ETAPA] API Key source:', conta?.openai_api_key ? 'conta' : 'env');
       
       if (apiKeyToUse) {
         try {
