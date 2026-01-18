@@ -605,6 +605,83 @@ async function executarAgendaLocal(
   return { sucesso: true, mensagem: 'Ação de agenda processada' };
 }
 
+// Função para executar verificação de cliente durante tool-calling (retorna resultado real para a IA)
+async function executarVerificarCliente(
+  supabase: any,
+  contaId: string,
+  conversaId: string,
+  contatoId: string
+): Promise<{ sucesso: boolean; mensagem: string; dados?: any }> {
+  console.log('🔍 [VERIFICAR_CLIENTE] Executando durante tool-calling...');
+  console.log('🔍 [VERIFICAR_CLIENTE] contato_id:', contatoId);
+  
+  try {
+    // Buscar negociações do contato com seus estágios
+    const { data: negociacoesContato, error: negError } = await supabase
+      .from('negociacoes')
+      .select(`
+        id,
+        status,
+        estagio_id,
+        estagios!negociacoes_estagio_id_fkey (
+          id,
+          nome,
+          tipo
+        )
+      `)
+      .eq('contato_id', contatoId);
+    
+    if (negError) {
+      console.error('❌ [VERIFICAR_CLIENTE] Erro ao buscar negociações:', negError);
+      return { sucesso: false, mensagem: 'Erro ao verificar status de cliente' };
+    }
+    
+    console.log('🔍 [VERIFICAR_CLIENTE] Negociações encontradas:', negociacoesContato?.length || 0);
+    
+    // Verificar se alguma negociação está em estágio tipo 'cliente'
+    const negociacaoCliente = negociacoesContato?.find((n: any) => {
+      const tipo = n.estagios?.tipo;
+      console.log(`   - Negociação ${n.id}: estágio=${n.estagios?.nome || 'N/A'}, tipo=${tipo || 'N/A'}`);
+      return tipo === 'cliente';
+    });
+    
+    // Registrar mensagem de sistema para rastreamento
+    await supabase.from('mensagens').insert({
+      conversa_id: conversaId,
+      conta_id: contaId,
+      contato_id: contatoId,
+      tipo: 'sistema',
+      direcao: 'saida',
+      conteudo: `🔍 Status de cliente verificado no CRM: ${negociacaoCliente ? 'É CLIENTE' : 'NÃO é cliente'}`,
+      enviada_por_ia: true,
+      metadata: { 
+        interno: true, 
+        acao_tipo: 'verificar_cliente',
+        resultado: negociacaoCliente ? 'cliente' : 'nao_cliente',
+      }
+    });
+    
+    if (negociacaoCliente) {
+      console.log('✅ [VERIFICAR_CLIENTE] Lead É CLIENTE - Etapa:', negociacaoCliente.estagios?.nome);
+      return {
+        sucesso: true,
+        mensagem: `SIM - Este lead É CLIENTE. Está na etapa "${negociacaoCliente.estagios?.nome}" marcada como cliente.`,
+        dados: { is_cliente: true, estagio_nome: negociacaoCliente.estagios?.nome }
+      };
+    } else {
+      console.log('❌ [VERIFICAR_CLIENTE] Lead NÃO é cliente');
+      return {
+        sucesso: true,
+        mensagem: 'NÃO - Este lead NÃO É CLIENTE. Não possui negociação em etapa marcada como cliente.',
+        dados: { is_cliente: false }
+      };
+    }
+  } catch (e) {
+    console.error('❌ [VERIFICAR_CLIENTE] Erro na verificação:', e);
+    return { sucesso: false, mensagem: 'Erro ao verificar status de cliente' };
+  }
+}
+
 // Função para detectar se a mensagem parece ser uma confirmação de agendamento
 function detectarConfirmacaoAgendamento(mensagem: string, historico: string[]): boolean {
   const msgLower = mensagem.toLowerCase().trim();
@@ -680,7 +757,8 @@ async function callOpenAI(
   temperatura: number,
   tools?: any[],
   executarAgendaFn?: (valor: string) => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>,
-  forcarFerramentaAgenda?: boolean
+  forcarFerramentaAgenda?: boolean,
+  executarVerificarClienteFn?: () => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
 ): Promise<AIResponse> {
   const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
                        modelo.includes('o3') || modelo.includes('o4');
@@ -753,6 +831,15 @@ async function callOpenAI(
           // Se for ação de agenda (consultar OU criar), executar e guardar resultado
           if (args.tipo === 'agenda' && executarAgendaFn) {
             const resultado = await executarAgendaFn(args.valor);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              content: JSON.stringify(resultado),
+            });
+          } else if (args.tipo === 'verificar_cliente' && executarVerificarClienteFn) {
+            // Executar verificação de cliente durante tool-calling para retornar resultado real para a IA
+            console.log('🔍 [TOOL-CALLING] Executando verificar_cliente...');
+            const resultado = await executarVerificarClienteFn();
+            console.log('🔍 [TOOL-CALLING] Resultado verificar_cliente:', resultado.mensagem);
             toolResults.push({
               tool_call_id: toolCall.id,
               content: JSON.stringify(resultado),
@@ -1555,12 +1642,12 @@ serve(async (req) => {
             properties: {
               tipo: {
                 type: 'string',
-                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup'],
-                description: 'Tipo da ação. IMPORTANTE - DIFERENÇA ENTRE FOLLOWUP E AGENDA: Use "followup" para LEMBRETE de retorno (lead disse "me liga amanhã", "fala comigo mais tarde", etc - NÃO precisa consultar calendário!). Use "agenda" para REUNIÃO com horário marcado e link de meet (lead quer consulta/reunião - PRECISA consultar disponibilidade primeiro). Se você perguntou "quando retomo o contato" e lead deu horário, é FOLLOW-UP!',
+                enum: ['etapa', 'tag', 'transferir', 'notificar', 'finalizar', 'nome', 'negociacao', 'agenda', 'campo', 'obter', 'followup', 'verificar_cliente'],
+                description: 'Tipo da ação. IMPORTANTE - DIFERENÇA ENTRE FOLLOWUP E AGENDA: Use "followup" para LEMBRETE de retorno (lead disse "me liga amanhã", "fala comigo mais tarde", etc - NÃO precisa consultar calendário!). Use "agenda" para REUNIÃO com horário marcado e link de meet (lead quer consulta/reunião - PRECISA consultar disponibilidade primeiro). Se você perguntou "quando retomo o contato" e lead deu horário, é FOLLOW-UP! Use "verificar_cliente" para verificar no CRM se o lead é um cliente existente (etapa marcada como tipo cliente).',
               },
               valor: {
                 type: 'string',
-                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead.',
+                description: 'Valor da ação. Para "followup": "data_iso8601:motivo" (ex: "2025-01-10T14:00:00-03:00:lead pediu retorno às 14h") - NÃO consulte calendário! Para "agenda": "consultar" primeiro, depois "criar:titulo|data_iso8601". Para "campo": "nome-do-campo:valor-exato". Para "nome": nome completo do lead. Para "verificar_cliente": não precisa de valor.',
               },
             },
             required: ['tipo'],
@@ -1616,10 +1703,15 @@ serve(async (req) => {
 
     let result: AIResponse;
 
+    // Criar função de verificação de cliente para passar para as chamadas de IA
+    const executarVerificarClienteFn = async () => {
+      return await executarVerificarCliente(supabase, conta_id, conversa_id, contatoId);
+    };
+
     // Usar OpenAI (único provedor suportado)
     try {
       console.log('Usando OpenAI com modelo:', modelo);
-      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn, forcarFerramentaAgenda);
+      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn, forcarFerramentaAgenda, executarVerificarClienteFn);
       console.log('✅ Resposta via OpenAI');
     } catch (openaiError: any) {
       const errorMsg = openaiError.message || '';
@@ -1697,6 +1789,12 @@ serve(async (req) => {
         // Pular TODAS as ações de agenda (consultar E criar) - já foram executadas durante o tool-calling
         if (acao.tipo === 'agenda') {
           console.log('Pulando ação de agenda (já executada durante tool-calling):', acao.valor);
+          continue;
+        }
+        
+        // Pular ação verificar_cliente - já foi executada durante tool-calling
+        if (acao.tipo === 'verificar_cliente') {
+          console.log('Pulando ação verificar_cliente (já executada durante tool-calling)');
           continue;
         }
         
