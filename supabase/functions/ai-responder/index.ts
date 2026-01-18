@@ -972,7 +972,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento, transferencia_agente } = await req.json();
+    const { conversa_id, mensagem, conta_id: contaIdParam, mensagem_tipo, transcricao, descricao_imagem, texto_documento, transferencia_agente, nova_conversa_agente } = await req.json();
 
     console.log('=== AI RESPONDER ===');
     console.log('Conversa ID:', conversa_id);
@@ -980,6 +980,7 @@ serve(async (req) => {
     console.log('Mensagem recebida:', mensagem);
     console.log('Tipo de mensagem:', mensagem_tipo || 'texto');
     console.log('Transferência de agente:', transferencia_agente || false);
+    console.log('Nova conversa agente (ignorar histórico):', nova_conversa_agente || false);
     if (transcricao) {
       console.log('Transcrição de áudio:', transcricao.substring(0, 100));
     }
@@ -1222,23 +1223,33 @@ serve(async (req) => {
     }
 
     // 6. Buscar histórico de mensagens da conversa (limite configurável por agente, filtrando por memoria_limpa_em)
-    const limiteContexto = agente.quantidade_mensagens_contexto || 20;
-    console.log('Limite de mensagens no contexto:', limiteContexto);
+    // Se for nova_conversa_agente, ignorar TODO o histórico para o novo agente começar do zero
+    let historico: any[] = [];
     
-    let historicoQuery = supabase
-      .from('mensagens')
-      .select('conteudo, direcao, created_at')
-      .eq('conversa_id', conversa_id)
-      .order('created_at', { ascending: true })
-      .limit(limiteContexto);
+    if (nova_conversa_agente) {
+      console.log('🆕 Nova conversa para agente - IGNORANDO histórico, agente começará na Etapa 1');
+      // Não carregar histórico - o novo agente deve começar do zero com sua Etapa 1
+      historico = [];
+    } else {
+      const limiteContexto = agente.quantidade_mensagens_contexto || 20;
+      console.log('Limite de mensagens no contexto:', limiteContexto);
+      
+      let historicoQuery = supabase
+        .from('mensagens')
+        .select('conteudo, direcao, created_at')
+        .eq('conversa_id', conversa_id)
+        .order('created_at', { ascending: true })
+        .limit(limiteContexto);
 
-    // Se há data de limpeza de memória, ignorar mensagens anteriores
-    if (memoriaLimpaEm) {
-      console.log('Filtrando mensagens após:', memoriaLimpaEm);
-      historicoQuery = historicoQuery.gt('created_at', memoriaLimpaEm);
+      // Se há data de limpeza de memória, ignorar mensagens anteriores
+      if (memoriaLimpaEm) {
+        console.log('Filtrando mensagens após:', memoriaLimpaEm);
+        historicoQuery = historicoQuery.gt('created_at', memoriaLimpaEm);
+      }
+
+      const { data: historicoData } = await historicoQuery;
+      historico = historicoData || [];
     }
-
-    const { data: historico } = await historicoQuery;
 
     // 7. Parsear ações das etapas para construir ferramentas
     let todasAcoes: { etapaNum: number; acoes: string[] }[] = [];
