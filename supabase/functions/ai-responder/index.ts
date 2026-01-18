@@ -16,6 +16,7 @@ interface AIResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+  mensagemJaSalva?: boolean;
 }
 
 interface Acao {
@@ -2057,9 +2058,71 @@ serve(async (req) => {
                 if (!result.acoes) result.acoes = [];
                 result.acoes.push(acao);
                 
-                // Se for transferir, executar imediatamente
+                // Se for transferir, PRIMEIRO salvar e enviar mensagem, DEPOIS transferir
                 if (acao.tipo === 'transferir') {
-                  console.log('🔄 [IR_ETAPA] Executando @transferir imediatamente...');
+                  console.log('🔄 [IR_ETAPA] Detectado @transferir - salvando mensagem ANTES de transferir...');
+                  
+                  // Salvar mensagem da Etapa 2 PRIMEIRO
+                  try {
+                    const { error: errSalvar } = await supabase
+                      .from('mensagens')
+                      .insert({
+                        conversa_id,
+                        conteudo: novaResposta.resposta,
+                        direcao: 'saida',
+                        tipo: 'texto',
+                        enviada_por_ia: true,
+                        conta_id: conta_id,
+                      });
+                    
+                    if (errSalvar) {
+                      console.error('❌ [IR_ETAPA] Erro ao salvar mensagem antes de transferir:', errSalvar);
+                    } else {
+                      console.log('✅ [IR_ETAPA] Mensagem salva no banco ANTES de transferir');
+                      
+                      // Atualizar conversa
+                      await supabase
+                        .from('conversas')
+                        .update({ 
+                          ultima_mensagem: novaResposta.resposta.substring(0, 100),
+                          ultima_mensagem_at: new Date().toISOString(),
+                        })
+                        .eq('id', conversa_id);
+                      
+                      // Buscar dados da conversa para enviar mensagem
+                      const { data: conversaData } = await supabase
+                        .from('conversas')
+                        .select('conexao_id, contato_id, contatos(telefone)')
+                        .eq('id', conversa_id)
+                        .single();
+                      
+                      const telefoneContato = (conversaData?.contatos as any)?.[0]?.telefone || (conversaData?.contatos as any)?.telefone;
+                      if (conversaData?.conexao_id && telefoneContato) {
+                        console.log('📤 [IR_ETAPA] Enviando mensagem via WhatsApp ANTES de transferir...');
+                        await fetch(`${supabaseUrl}/functions/v1/enviar-mensagem`, {
+                          method: 'POST',
+                          headers: {
+                            'Authorization': `Bearer ${supabaseKey}`,
+                            'Content-Type': 'application/json',
+                          },
+                          body: JSON.stringify({
+                            conexao_id: conversaData.conexao_id,
+                            telefone: telefoneContato,
+                            mensagem: novaResposta.resposta,
+                          }),
+                        });
+                        console.log('✅ [IR_ETAPA] Mensagem enviada via WhatsApp ANTES de transferir');
+                      }
+                      
+                      // Marcar flag para NÃO salvar novamente depois
+                      result.mensagemJaSalva = true;
+                    }
+                  } catch (errSave) {
+                    console.error('❌ [IR_ETAPA] Erro ao salvar/enviar mensagem antes de transferir:', errSave);
+                  }
+                  
+                  // AGORA executar a transferência
+                  console.log('🔄 [IR_ETAPA] Executando @transferir...');
                   try {
                     const responseAcao = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
                       method: 'POST',
@@ -2089,8 +2152,63 @@ serve(async (req) => {
 
             if (matchTransferir && !jaExecutouTransferir) {
               const agenteIdTransferir = matchTransferir[1];
-              console.log('🔄 [IR_ETAPA FALLBACK] Prompt contém @transferir que não foi executado. Executando agora:', agenteIdTransferir);
+              console.log('🔄 [IR_ETAPA FALLBACK] Prompt contém @transferir que não foi executado. Salvando mensagem ANTES...');
               
+              // FALLBACK também salva mensagem primeiro
+              try {
+                const { error: errSalvarFb } = await supabase
+                  .from('mensagens')
+                  .insert({
+                    conversa_id,
+                    conteudo: novaResposta.resposta,
+                    direcao: 'saida',
+                    tipo: 'texto',
+                    enviada_por_ia: true,
+                    conta_id: conta_id,
+                  });
+                
+                if (!errSalvarFb) {
+                  console.log('✅ [IR_ETAPA FALLBACK] Mensagem salva no banco');
+                  
+                  await supabase
+                    .from('conversas')
+                    .update({ 
+                      ultima_mensagem: novaResposta.resposta.substring(0, 100),
+                      ultima_mensagem_at: new Date().toISOString(),
+                    })
+                    .eq('id', conversa_id);
+                  
+                  const { data: conversaDataFb } = await supabase
+                    .from('conversas')
+                    .select('conexao_id, contato_id, contatos(telefone)')
+                    .eq('id', conversa_id)
+                    .single();
+                  
+                  const telefoneFb = (conversaDataFb?.contatos as any)?.[0]?.telefone || (conversaDataFb?.contatos as any)?.telefone;
+                  if (conversaDataFb?.conexao_id && telefoneFb) {
+                    await fetch(`${supabaseUrl}/functions/v1/enviar-mensagem`, {
+                      method: 'POST',
+                      headers: {
+                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        conexao_id: conversaDataFb.conexao_id,
+                        telefone: telefoneFb,
+                        mensagem: novaResposta.resposta,
+                      }),
+                    });
+                    console.log('✅ [IR_ETAPA FALLBACK] Mensagem enviada via WhatsApp');
+                  }
+                  
+                  result.mensagemJaSalva = true;
+                }
+              } catch (errSaveFb) {
+                console.error('❌ [IR_ETAPA FALLBACK] Erro ao salvar mensagem:', errSaveFb);
+              }
+              
+              // Executar transferência
+              console.log('🔄 [IR_ETAPA FALLBACK] Executando transferência...');
               try {
                 const responseAcao = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
                   method: 'POST',
