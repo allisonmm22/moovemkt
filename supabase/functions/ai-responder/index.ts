@@ -2335,6 +2335,8 @@ serve(async (req) => {
         should_respond: true, 
         provider: result.provider,
         acoes_executadas: result.acoes?.length || 0,
+        mensagem_ja_salva: result.mensagemJaSalva || false,  // Flag para evitar duplicação
+        mensagemJaSalva: result.mensagemJaSalva || false,    // Compat camelCase
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
