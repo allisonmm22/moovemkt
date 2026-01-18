@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'verificar_cliente';
   valor?: string;
 }
 
@@ -50,6 +50,8 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
       return `📝 Campo "${nomeCampo}" atualizado para "${valorCampo}"`;
     case 'obter':
       return `🔍 Campo "${valor?.replace(/-/g, ' ')}" consultado`;
+    case 'verificar_cliente':
+      return `🔍 Status de cliente verificado no CRM`;
     case 'followup': {
       // Extrair data e motivo do valor
       const partes = valor?.split(':') || [];
@@ -1263,6 +1265,62 @@ serve(async (req) => {
           sucesso: true, 
           mensagem: `Follow-up agendado para ${dataFormatada}. Motivo: ${motivo.trim()}`
         };
+        break;
+      }
+
+      case 'verificar_cliente': {
+        console.log('🔍 [VERIFICAR_CLIENTE] Consultando status no CRM...');
+        console.log('🔍 [VERIFICAR_CLIENTE] Contato ID:', contato_id);
+        
+        // Buscar QUALQUER negociação do contato (aberta ou fechada)
+        // que esteja em um estágio com tipo = 'cliente'
+        const { data: negociacoesContato, error: negError } = await supabase
+          .from('negociacoes')
+          .select(`
+            id,
+            status,
+            estagio_id,
+            estagios!negociacoes_estagio_id_fkey (
+              id,
+              nome,
+              tipo
+            )
+          `)
+          .eq('contato_id', contato_id);
+        
+        if (negError) {
+          console.log('❌ [VERIFICAR_CLIENTE] Erro ao buscar negociações:', negError);
+          throw negError;
+        }
+        
+        console.log('🔍 [VERIFICAR_CLIENTE] Negociações encontradas:', negociacoesContato?.length || 0);
+        
+        // Verificar se alguma negociação está em um estágio do tipo 'cliente'
+        const negociacaoCliente = negociacoesContato?.find((n: any) => {
+          const tipo = n.estagios?.tipo;
+          console.log(`   - Negociação ${n.id}: estágio=${n.estagios?.nome || 'N/A'}, tipo=${tipo || 'N/A'}`);
+          return tipo === 'cliente';
+        });
+        
+        if (negociacaoCliente) {
+          console.log('✅ [VERIFICAR_CLIENTE] Lead É CLIENTE - Encontrado em estágio:', (negociacaoCliente as any).estagios?.nome);
+          resultado = { 
+            sucesso: true, 
+            mensagem: `SIM - Este lead É CLIENTE. Está na etapa "${(negociacaoCliente as any).estagios?.nome || 'Cliente'}" que está marcada como cliente no CRM.`,
+            dados: { 
+              is_cliente: true,
+              estagio_nome: (negociacaoCliente as any).estagios?.nome,
+              negociacao_id: negociacaoCliente.id
+            }
+          };
+        } else {
+          console.log('❌ [VERIFICAR_CLIENTE] Lead NÃO é cliente');
+          resultado = { 
+            sucesso: true, 
+            mensagem: 'NÃO - Este lead NÃO É CLIENTE. Não possui negociação em etapa marcada como cliente no CRM.',
+            dados: { is_cliente: false }
+          };
+        }
         break;
       }
 

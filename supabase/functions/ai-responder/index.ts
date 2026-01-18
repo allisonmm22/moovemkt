@@ -19,7 +19,7 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'ir_etapa';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'ir_etapa' | 'verificar_cliente';
   valor?: string;
   calendario_id?: string;
 }
@@ -60,11 +60,11 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
   
   // Regex para ações com valor entre aspas (permite espaços)
   // Formato: @campo:nome-campo:"valor com espaços"
-  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa):([^\s@:]+):"([^"]+)"/gi;
+  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa|verificar_cliente):([^\s@:]+):"([^"]+)"/gi;
   
   // Regex para ações sem aspas (formato original, sem espaços no valor)
-  // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa ou @ir_etapa:numero
-  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
+  // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa ou @ir_etapa:numero ou @verificar_cliente
+  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa|verificar_cliente)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
   
   // Primeiro, processar ações com aspas
   const matchesComAspas = [...texto.matchAll(regexComAspas)];
@@ -1354,6 +1354,7 @@ serve(async (req) => {
       promptCompleto += '- @nome:<novo nome> - Alterar o nome do contato/lead (use quando o cliente se identificar)\n';
       promptCompleto += '- @campo:<nome-do-campo>:<valor> - Atualizar um campo personalizado do contato (ex: @campo:data-nascimento:15/03/1990)\n';
       promptCompleto += '- @obter:<nome-do-campo> - Obter o valor de um campo personalizado do contato (ex: @obter:cidade)\n';
+      promptCompleto += '- @verificar_cliente - Consultar no CRM se o lead é cliente (verifica se há negociação em etapa marcada como cliente). Retorna SIM ou NÃO.\n';
       promptCompleto += '- @agenda:consultar - Consultar disponibilidade do calendário (próximos 7 dias)\n';
       promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
       
