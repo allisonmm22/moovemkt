@@ -404,9 +404,14 @@ serve(async (req) => {
           }
 
           if (agenteId) {
+            // RESET da etapa_ia_atual para forçar novo agente a começar na Etapa 1
             const { error } = await supabase
               .from('conversas')
-              .update({ agente_ia_ativo: true, agente_ia_id: agenteId })
+              .update({ 
+                agente_ia_ativo: true, 
+                agente_ia_id: agenteId,
+                etapa_ia_atual: null  // RESET - força novo agente a começar na sua Etapa 1
+              })
               .eq('id', conversa_id);
 
             if (error) throw error;
@@ -424,21 +429,12 @@ serve(async (req) => {
             
             // Disparar resposta automática do novo agente
             console.log('Disparando resposta do novo agente:', agenteId);
-            
-            // Buscar última mensagem do lead para contexto
-            const { data: ultimaMensagemLead } = await supabase
-              .from('mensagens')
-              .select('conteudo')
-              .eq('conversa_id', conversa_id)
-              .eq('direcao', 'entrada')
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .single();
+            console.log('🔄 etapa_ia_atual resetada para null - novo agente começará na sua Etapa 1');
             
             // Chamar ai-responder para gerar resposta do novo agente
             const aiResponderUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-responder`;
             try {
-              console.log('📤 Chamando ai-responder para novo agente...');
+              console.log('📤 Chamando ai-responder para novo agente (nova_conversa_agente=true)...');
               
               const aiResponse = await fetch(aiResponderUrl, {
                 method: 'POST',
@@ -448,9 +444,10 @@ serve(async (req) => {
                 },
                 body: JSON.stringify({
                   conversa_id,
-                  mensagem: ultimaMensagemLead?.conteudo || 'Olá',
+                  mensagem: 'transferência',  // Mensagem genérica
                   conta_id,
                   transferencia_agente: true, // Flag para indicar transferência - força resposta
+                  nova_conversa_agente: true, // Flag para ignorar histórico e usar Etapa 1
                 }),
               });
               
