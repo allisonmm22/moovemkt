@@ -125,6 +125,15 @@ serve(async (req) => {
 
         const aiData = await aiResponse.json();
         console.log(`[processar-respostas-pendentes] Resposta IA:`, aiData);
+        
+        // Verificar se a mensagem já foi salva/enviada pelo ai-responder
+        const mensagemJaSalva = aiData.mensagem_ja_salva || aiData.mensagemJaSalva;
+        if (mensagemJaSalva) {
+          console.log(`[processar-respostas-pendentes] ✅ Mensagem já salva/enviada, pulando duplicação`);
+          await supabase.from('respostas_pendentes').delete().eq('id', pendente.id);
+          processados++;
+          continue;
+        }
 
         if (aiData.should_respond && aiData.resposta) {
           // Buscar dados da conexão para enviar mensagem

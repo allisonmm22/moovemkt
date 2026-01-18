@@ -427,11 +427,31 @@ serve(async (req) => {
 
             resultado = { sucesso: true, mensagem: `Conversa transferida para agente IA: ${agenteRefOriginal}` };
             
-            // Disparar resposta automática do novo agente
-            console.log('Disparando resposta do novo agente:', agenteId);
             console.log('🔄 etapa_ia_atual resetada para null - novo agente começará na sua Etapa 1');
             
-            // Chamar ai-responder para gerar resposta do novo agente
+            // IMPORTANTE: Registrar mensagem de sistema ANTES de chamar o novo agente
+            // Isso garante que a ordem no chat seja: transferência -> resposta do novo agente
+            const mensagemSistemaTransfer = `🤖 Conversa transferida para agente "${agenteRefOriginal}"`;
+            await supabase
+              .from('mensagens')
+              .insert({
+                conversa_id,
+                conteudo: mensagemSistemaTransfer,
+                direcao: 'saida',
+                tipo: 'sistema',
+                enviada_por_ia: true,
+                metadata: { 
+                  interno: true, 
+                  acao_tipo: 'transferir',
+                  acao_valor: `agente:${agenteRefOriginal}`
+                }
+              });
+            console.log('✅ Mensagem de sistema registrada ANTES do novo agente');
+            
+            // Pequeno delay para garantir ordenação visual (800ms)
+            await new Promise(resolve => setTimeout(resolve, 800));
+            
+            // Agora chamar ai-responder para gerar resposta do novo agente
             const aiResponderUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/ai-responder`;
             try {
               console.log('📤 Chamando ai-responder para novo agente (nova_conversa_agente=true)...');
@@ -466,7 +486,10 @@ serve(async (req) => {
                 console.warn('⚠️ ai-responder retornou should_respond=false:', aiResult.error || 'sem motivo');
               }
               
-              if (aiResult.resposta && aiResult.should_respond) {
+              // Verificar se mensagem já foi salva pelo ai-responder
+              const mensagemJaSalva = aiResult.mensagem_ja_salva || aiResult.mensagemJaSalva;
+              
+              if (aiResult.resposta && aiResult.should_respond && !mensagemJaSalva) {
                 // Buscar conexão e contato para enviar via WhatsApp
                 const { data: conversaData } = await supabase
                   .from('conversas')
@@ -519,10 +542,19 @@ serve(async (req) => {
                     console.error('❌ Erro ao enviar resposta:', enviarError);
                   }
                 }
+              } else if (mensagemJaSalva) {
+                console.log('✅ Mensagem já foi salva/enviada pelo ai-responder, pulando duplicação');
               }
             } catch (aiError) {
               console.error('❌ Erro ao gerar resposta do novo agente:', aiError);
             }
+            
+            // Marcar que já registramos a mensagem de sistema (para não duplicar no final)
+            resultado = { 
+              sucesso: true, 
+              mensagem: `Conversa transferida para agente IA: ${agenteRefOriginal}`,
+              dados: { mensagem_sistema_ja_registrada: true }
+            };
           } else {
             resultado = { sucesso: false, mensagem: `Agente "${agenteRefOriginal}" não encontrado` };
           }
@@ -1326,7 +1358,8 @@ serve(async (req) => {
     }
 
     // Registrar mensagem de sistema para rastreamento interno
-    if (resultado.sucesso) {
+    // EXCETO se já foi registrada (ex: transferência para agente já registra antes de chamar ai-responder)
+    if (resultado.sucesso && !resultado.dados?.mensagem_sistema_ja_registrada) {
       const mensagemSistema = gerarMensagemSistema(acaoObj.tipo, acaoObj.valor, resultado.mensagem);
       
       await supabase
@@ -1345,6 +1378,8 @@ serve(async (req) => {
         });
       
       console.log('Mensagem de sistema registrada:', mensagemSistema);
+    } else if (resultado.dados?.mensagem_sistema_ja_registrada) {
+      console.log('Mensagem de sistema já foi registrada anteriormente, pulando duplicação');
     }
 
     console.log('Resultado:', resultado);

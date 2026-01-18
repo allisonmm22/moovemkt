@@ -222,6 +222,18 @@ serve(async (req) => {
 
     const aiData = await aiResponse.json();
     console.log('Resposta IA:', aiData?.resposta?.substring(0, 100) || 'sem resposta');
+    
+    // Verificar se a mensagem já foi salva/enviada pelo ai-responder
+    const mensagemJaSalva = aiData.mensagem_ja_salva || aiData.mensagemJaSalva;
+    if (mensagemJaSalva) {
+      console.log('✅ Mensagem já foi salva/enviada pelo ai-responder, pulando duplicação');
+      // Remover da fila de pendentes
+      await supabase.from('respostas_pendentes').delete().eq('conversa_id', conversa_id);
+      console.log('Pendência removida');
+      return new Response(JSON.stringify({ success: true, mensagem_ja_salva: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     // Enviar resposta se houver
     if (aiData.should_respond && aiData.resposta) {
