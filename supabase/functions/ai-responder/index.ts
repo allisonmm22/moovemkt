@@ -1994,6 +1994,13 @@ serve(async (req) => {
       promptNovaEtapa += `- Se o prompt diz: Mensagem: "Oi, [nome] Dr?" → você DEVE responder: "Oi, João Dr?" (se o nome for João)\n`;
       promptNovaEtapa += `- COPIE LITERALMENTE o texto entre aspas, incluindo TODAS as palavras sem exceção.\n\n`;
       
+      // REGRA DE EXECUÇÃO DE AÇÕES APÓS IR_ETAPA
+      promptNovaEtapa += `## ⚠️ EXECUÇÃO DE AÇÕES - MUITO IMPORTANTE\n`;
+      promptNovaEtapa += `- Se a descrição da etapa contém @transferir:agente:xxx, você DEVE chamar executar_acao com tipo="transferir" e valor="agente:xxx"\n`;
+      promptNovaEtapa += `- Execute a mensagem E a transferência na mesma resposta\n`;
+      promptNovaEtapa += `- O @transferir deve ser executado SILENCIOSAMENTE - não mencione ao cliente\n`;
+      promptNovaEtapa += `- Exemplo: Se instruções dizem "@transferir:agente:abc-123", chame executar_acao(tipo="transferir", valor="agente:abc-123")\n\n`;
+      
       promptNovaEtapa += `## ETAPA ATUAL DE ATENDIMENTO\n`;
       promptNovaEtapa += `**Você está na Etapa ${novaEtapaExecutada.numero}: ${novaEtapaExecutada.nome}**\n\n`;
       promptNovaEtapa += `### Instruções desta etapa:\n${novaEtapaExecutada.descricao}\n`;
@@ -2019,7 +2026,7 @@ serve(async (req) => {
           // Mensagens para a nova chamada
           const mensagensNovaEtapa = [
             { role: 'system', content: promptNovaEtapa },
-            { role: 'user', content: 'Envie EXATAMENTE a mensagem especificada entre aspas nas instruções da etapa, substituindo apenas placeholders como [nome do lead] ou [nome] pelo nome real do contato. NÃO modifique, NÃO remova e NÃO altere nenhuma palavra da mensagem original.' }
+            { role: 'user', content: 'PASSO 1: Envie EXATAMENTE a mensagem especificada entre aspas nas instruções, substituindo [nome do lead] pelo nome real.\nPASSO 2: Se as instruções contêm @transferir:agente:xxx, chame executar_acao com tipo="transferir" e valor="agente:xxx" SILENCIOSAMENTE.\nIMPORTANTE: Execute AMBOS os passos!' }
           ];
           
           console.log('🔄 [IR_ETAPA] Fazendo nova chamada à IA para gerar resposta da nova etapa...');
@@ -2073,6 +2080,35 @@ serve(async (req) => {
                     console.error('❌ [IR_ETAPA] Erro ao executar transferir:', errAcao);
                   }
                 }
+              }
+            }
+            
+            // FALLBACK: Verificar se o prompt da etapa contém @transferir que não foi executado
+            const matchTransferir = novaEtapaExecutada.descricao?.match(/@transferir:agente:([a-f0-9-]+)/i);
+            const jaExecutouTransferir = novaResposta.acoes?.some((a: any) => a.tipo === 'transferir');
+
+            if (matchTransferir && !jaExecutouTransferir) {
+              const agenteIdTransferir = matchTransferir[1];
+              console.log('🔄 [IR_ETAPA FALLBACK] Prompt contém @transferir que não foi executado. Executando agora:', agenteIdTransferir);
+              
+              try {
+                const responseAcao = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${supabaseKey}`,
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    acao: { tipo: 'transferir', valor: `agente:${agenteIdTransferir}` },
+                    conversa_id: conversa_id,
+                    contato_id: contatoId,
+                    conta_id: conta_id,
+                  }),
+                });
+                const resultadoAcao = await responseAcao.json();
+                console.log('✅ [IR_ETAPA FALLBACK] Transferência executada:', resultadoAcao);
+              } catch (errAcao) {
+                console.error('❌ [IR_ETAPA FALLBACK] Erro ao executar transferir:', errAcao);
               }
             }
           } else {
