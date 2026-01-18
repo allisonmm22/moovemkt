@@ -1001,6 +1001,7 @@ function EtapasAtendimentoTab({
         isOpen={modalDecisao.isOpen}
         onClose={() => setModalDecisao(prev => ({ ...prev, isOpen: false }))}
         onInsert={handleDecisaoInsert}
+        agentId={agentId}
       />
 
       {confirmDelete && (
