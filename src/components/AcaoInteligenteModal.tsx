@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
   Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus,
-  FileEdit, FileSearch, ArrowRightCircle
+  FileEdit, FileSearch, ArrowRightCircle, UserCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -167,6 +167,14 @@ const tiposAcao: AcaoTipo[] = [
     color: 'hsl(270 80% 50%)',
     bgColor: 'hsl(270 80% 50% / 0.1)',
   },
+  {
+    id: 'verificar-cliente',
+    label: 'Verificar Cliente',
+    description: 'Consulta se o lead é cliente no CRM',
+    icon: UserCheck,
+    color: 'hsl(150 80% 40%)',
+    bgColor: 'hsl(150 80% 40% / 0.1)',
+  },
 ];
 
 interface TagItem {
@@ -321,6 +329,7 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert, agentId }: Aca
         return produtoValue.trim().length > 0;
       case 'finalizar':
       case 'nome':
+      case 'verificar-cliente':
         return true;
       case 'agenda-consultar':
       case 'agenda-criar':
@@ -403,6 +412,8 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert, agentId }: Aca
       }
       case 'ir-etapa':
         return `@ir_etapa:${etapaAgenteSelecionada}`;
+      case 'verificar-cliente':
+        return '@verificar_cliente';
       default:
         return '';
     }
