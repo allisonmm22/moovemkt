@@ -1764,6 +1764,9 @@ serve(async (req) => {
       }
     }
 
+    // 🆕 Variável para rastrear se houve mudança de etapa (para gerar nova resposta depois)
+    let novaEtapaExecutada: { id: string; nome: string; numero: number; descricao: string | null } | null = null;
+
     // 13. Executar ações se houver
     if (result.acoes && result.acoes.length > 0 && contatoId) {
       console.log('Executando', result.acoes.length, 'ações...');
@@ -1834,10 +1837,10 @@ serve(async (req) => {
           if (!isNaN(numeroEtapa)) {
             console.log('📍 [IR_ETAPA] Avançando para etapa número:', numeroEtapa);
             
-            // Buscar a etapa pelo número
+            // Buscar a etapa pelo número COM descrição completa
             const { data: etapas } = await supabase
               .from('agent_ia_etapas')
-              .select('id, nome, numero')
+              .select('id, nome, numero, descricao')
               .eq('agent_ia_id', agente.id)
               .eq('numero', numeroEtapa)
               .limit(1);
@@ -1856,6 +1859,15 @@ serve(async (req) => {
                 console.error('📍 [IR_ETAPA] Erro ao atualizar etapa:', updateError);
               } else {
                 console.log('📍 [IR_ETAPA] Etapa atualizada com sucesso para:', novaEtapa.nome);
+                
+                // 🆕 Guardar dados da nova etapa para gerar resposta baseada nela
+                novaEtapaExecutada = {
+                  id: novaEtapa.id,
+                  nome: novaEtapa.nome,
+                  numero: novaEtapa.numero,
+                  descricao: novaEtapa.descricao || null,
+                };
+                console.log('📍 [IR_ETAPA] Dados da nova etapa guardados para gerar nova resposta');
                 
                 // Registrar mensagem de sistema para rastreamento histórico
                 await supabase
@@ -1951,6 +1963,74 @@ serve(async (req) => {
         } catch (e) {
           console.error('Erro ao executar ação:', e);
         }
+      }
+    }
+
+    // 🆕 14. Se houve mudança de etapa, gerar nova resposta baseada no prompt da nova etapa
+    if (novaEtapaExecutada && novaEtapaExecutada.descricao) {
+      console.log('🔄 [IR_ETAPA] Gerando resposta baseada na nova etapa:', novaEtapaExecutada.nome);
+      console.log('🔄 [IR_ETAPA] Descrição da nova etapa:', novaEtapaExecutada.descricao?.substring(0, 200));
+      
+      // Montar prompt específico para a nova etapa
+      let promptNovaEtapa = agente.prompt_sistema || '';
+      promptNovaEtapa += `\n\n## CONTEXTO IMPORTANTE\n`;
+      promptNovaEtapa += `O lead acabou de ser transferido para esta nova etapa de atendimento.\n`;
+      promptNovaEtapa += `Você DEVE iniciar o atendimento seguindo as instruções específicas desta etapa.\n`;
+      promptNovaEtapa += `NÃO repita informações sobre etapas anteriores.\n\n`;
+      promptNovaEtapa += `## ETAPA ATUAL DE ATENDIMENTO\n`;
+      promptNovaEtapa += `**Você está na Etapa ${novaEtapaExecutada.numero}: ${novaEtapaExecutada.nome}**\n\n`;
+      promptNovaEtapa += `### Instruções desta etapa:\n${novaEtapaExecutada.descricao}\n`;
+      
+      // Adicionar dados do contato para contexto
+      if (dadosContato?.nome) {
+        promptNovaEtapa += `\n## DADOS DO CONTATO\n`;
+        promptNovaEtapa += `- Nome: ${dadosContato.nome}\n`;
+      }
+      
+      // Adicionar contexto CRM se disponível
+      if (crmContexto) {
+        promptNovaEtapa += `\n## CONTEXTO CRM\n`;
+        promptNovaEtapa += `- Estágio: ${crmContexto.estagio_nome || 'N/A'}\n`;
+      }
+      
+      // Buscar API key para fazer nova chamada
+      const apiKeyToUse = agente.openai_api_key || Deno.env.get('OPENAI_API_KEY') || Deno.env.get('LOVABLE_API_KEY');
+      
+      if (apiKeyToUse) {
+        try {
+          // Mensagens para a nova chamada
+          const mensagensNovaEtapa = [
+            { role: 'system', content: promptNovaEtapa },
+            { role: 'user', content: 'Inicie o atendimento desta nova etapa de forma natural, seguindo as instruções acima.' }
+          ];
+          
+          console.log('🔄 [IR_ETAPA] Fazendo nova chamada à IA para gerar resposta da nova etapa...');
+          
+          const novaResposta = await callOpenAI(
+            apiKeyToUse,
+            mensagensNovaEtapa,
+            modelo,
+            agente.max_tokens || 500,
+            agente.temperatura || 0.7,
+            undefined, // sem tools - apenas texto
+            undefined,
+            undefined,
+            undefined
+          );
+          
+          if (novaResposta.resposta && novaResposta.resposta.length > 10) {
+            console.log('✅ [IR_ETAPA] Nova resposta gerada:', novaResposta.resposta.substring(0, 100));
+            // Substituir resposta original pela nova resposta
+            result.resposta = novaResposta.resposta;
+          } else {
+            console.log('⚠️ [IR_ETAPA] Nova resposta muito curta, mantendo original');
+          }
+        } catch (e) {
+          console.error('Erro ao gerar resposta da nova etapa:', e);
+          // Manter resposta original como fallback
+        }
+      } else {
+        console.log('⚠️ [IR_ETAPA] API key não disponível para gerar nova resposta');
       }
     }
 
