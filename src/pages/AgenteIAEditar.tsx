@@ -53,7 +53,7 @@ interface AgentConfig {
   updated_at?: string;
 }
 
-type Tab = 'regras' | 'etapas' | 'perguntas' | 'horario' | 'agendamento' | 'configuracao';
+type Tab = 'regras' | 'prompt' | 'perguntas' | 'horario' | 'agendamento' | 'configuracao';
 
 const MAX_CARACTERES = 15000;
 
@@ -89,9 +89,9 @@ const tabConfig = [
     group: 'config'
   },
   { 
-    id: 'etapas' as Tab, 
-    label: 'Etapas de Atendimento', 
-    shortLabel: 'Etapas',
+    id: 'prompt' as Tab, 
+    label: 'Prompt do Agente', 
+    shortLabel: 'Prompt',
     icon: MessageCircle, 
     color: 'text-emerald-500',
     bgColor: 'bg-emerald-500/10',
@@ -317,9 +317,9 @@ export default function AgenteIAEditar() {
         if (config.prompt_sistema && config.prompt_sistema.length > 100) return 'complete';
         if (config.prompt_sistema && config.prompt_sistema.length > 0) return 'partial';
         return 'empty';
-      case 'etapas':
-        if (etapasCount >= 2) return 'complete';
-        if (etapasCount > 0) return 'partial';
+      case 'prompt':
+        if (etapasCaracteres > 100) return 'complete';
+        if (etapasCaracteres > 0) return 'partial';
         return 'empty';
       case 'perguntas':
         if (perguntasCount >= 3) return 'complete';
@@ -339,8 +339,6 @@ export default function AgenteIAEditar() {
 
   const getTabCount = (tabId: Tab): number | null => {
     switch (tabId) {
-      case 'etapas':
-        return etapasCount;
       case 'perguntas':
         return perguntasCount;
       default:
@@ -690,11 +688,10 @@ export default function AgenteIAEditar() {
                 />
               )}
 
-              {activeTab === 'etapas' && config && (
-                <EtapasAtendimentoTab 
+              {activeTab === 'prompt' && config && (
+                <PromptAgenteTab 
                   agentId={config.id} 
                   onCaracteresChange={setEtapasCaracteres}
-                  onCountChange={setEtapasCount}
                 />
               )}
 
@@ -812,178 +809,97 @@ Tom de voz:
   );
 }
 
-// Tab: Etapas de Atendimento
-interface Etapa {
-  id: string;
-  numero: number;
-  tipo: 'INICIO' | 'FINAL' | null;
-  nome: string;
-  descricao: string;
-  expandido: boolean;
-}
-
-interface ConfirmDeleteEtapa {
-  show: boolean;
-  id: string;
-  nome: string;
-}
-
-interface ModalDecisaoState {
-  isOpen: boolean;
-  etapaId: string;
-  cursorPosition: number;
-}
-
-function EtapasAtendimentoTab({ 
+// Tab: Prompt do Agente (único, sempre aberto)
+function PromptAgenteTab({ 
   agentId, 
   onCaracteresChange,
-  onCountChange
 }: { 
   agentId: string;
   onCaracteresChange: (count: number) => void;
-  onCountChange: (count: number) => void;
 }) {
-  const [etapas, setEtapas] = useState<Etapa[]>([]);
-  const [confirmDelete, setConfirmDelete] = useState<ConfirmDeleteEtapa | null>(null);
+  const [prompt, setPrompt] = useState<{
+    id: string;
+    nome: string;
+    descricao: string;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [modalDecisao, setModalDecisao] = useState<ModalDecisaoState>({
-    isOpen: false,
-    etapaId: '',
-    cursorPosition: 0,
-  });
-  
-  const cursorPositionsByEtapa = useRef<Record<string, number>>({});
+  const [modalAcao, setModalAcao] = useState(false);
 
   useEffect(() => {
-    const totalCaracteres = etapas.reduce((acc, etapa) => {
-      return acc + (etapa.nome?.length || 0) + (etapa.descricao?.length || 0);
-    }, 0);
-    onCaracteresChange(totalCaracteres);
-    onCountChange(etapas.length);
-  }, [etapas, onCaracteresChange, onCountChange]);
+    if (prompt) {
+      const total = (prompt.nome?.length || 0) + (prompt.descricao?.length || 0);
+      onCaracteresChange(total);
+    }
+  }, [prompt, onCaracteresChange]);
 
   useEffect(() => {
-    fetchEtapas();
+    fetchPrompt();
   }, [agentId]);
 
-  const fetchEtapas = async () => {
+  const fetchPrompt = async () => {
     try {
+      // Buscar a primeira etapa existente (única)
       const { data, error } = await supabase
         .from('agent_ia_etapas')
         .select('*')
         .eq('agent_ia_id', agentId)
-        .order('numero', { ascending: true });
+        .order('numero', { ascending: true })
+        .limit(1)
+        .maybeSingle();
 
       if (error) throw error;
 
-      setEtapas((data || []).map(e => ({
-        id: e.id,
-        numero: e.numero,
-        tipo: e.tipo as 'INICIO' | 'FINAL' | null,
-        nome: e.nome,
-        descricao: e.descricao || '',
-        expandido: false,
-      })));
+      if (data) {
+        setPrompt({
+          id: data.id,
+          nome: data.nome,
+          descricao: data.descricao || '',
+        });
+      } else {
+        // Criar prompt padrão se não existir
+        const novoId = crypto.randomUUID();
+        setPrompt({
+          id: novoId,
+          nome: 'Prompt Principal',
+          descricao: '',
+        });
+      }
     } catch (error) {
-      console.error('Erro ao buscar etapas:', error);
+      console.error('Erro ao buscar prompt:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const toggleEtapa = (id: string) => {
-    setEtapas(etapas.map(e => 
-      e.id === id ? { ...e, expandido: !e.expandido } : e
-    ));
+  const handleAcaoInsert = (action: string) => {
+    if (!prompt) return;
+    inserirAcaoNoRichEditor(prompt.descricao, action, (novaDescricao) => {
+      setPrompt({ ...prompt, descricao: novaDescricao });
+    });
   };
 
-  const addEtapa = () => {
-    const novaEtapa: Etapa = {
-      id: crypto.randomUUID(),
-      numero: etapas.length + 1,
-      tipo: null,
-      nome: `Nova Etapa ${etapas.length + 1}`,
-      descricao: '',
-      expandido: true,
-    };
-    setEtapas([...etapas, novaEtapa]);
-  };
-
-  const handleDeleteClick = (etapa: Etapa) => {
-    setConfirmDelete({ show: true, id: etapa.id, nome: etapa.nome });
-  };
-
-  const confirmDeleteEtapa = async () => {
-    if (confirmDelete) {
-      try {
-        await supabase
-          .from('agent_ia_etapas')
-          .delete()
-          .eq('id', confirmDelete.id);
-
-        const novasEtapas = etapas
-          .filter(e => e.id !== confirmDelete.id)
-          .map((e, index) => ({ ...e, numero: index + 1 }));
-        setEtapas(novasEtapas);
-        toast.success('Etapa excluída com sucesso');
-      } catch (error) {
-        console.error('Erro ao excluir:', error);
-      }
-      setConfirmDelete(null);
-    }
-  };
-
-  const updateEtapa = (id: string, field: keyof Etapa, value: string) => {
-    setEtapas(etapas.map(e => 
-      e.id === id ? { ...e, [field]: value } : e
-    ));
-  };
-
-  const handleDecisaoInsert = (action: string) => {
-    const etapa = etapas.find(e => e.id === modalDecisao.etapaId);
-    if (!etapa) return;
-
-    const pos = modalDecisao.cursorPosition;
-    const before = etapa.descricao.substring(0, pos);
-    const after = etapa.descricao.substring(pos);
-    const needsSpaceBefore = before.length > 0 && !before.endsWith(' ') && !before.endsWith('\n');
-    const needsSpaceAfter = after.length > 0 && !after.startsWith(' ') && !after.startsWith('\n');
-    
-    const novaDescricao = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
-    updateEtapa(modalDecisao.etapaId, 'descricao', novaDescricao);
-  };
-
-  const abrirModalDecisao = (etapaId: string, cursorPosition?: number) => {
-    const etapa = etapas.find(e => e.id === etapaId);
-    const pos = cursorPosition ?? (etapa?.descricao.length ?? 0);
-    setModalDecisao({ isOpen: true, etapaId, cursorPosition: pos });
-  };
-
-  const saveEtapa = async (id: string) => {
-    const etapa = etapas.find(e => e.id === id);
-    if (!etapa) return;
+  const savePrompt = async () => {
+    if (!prompt) return;
 
     setSaving(true);
     try {
       const { error } = await supabase
         .from('agent_ia_etapas')
         .upsert({
-          id: etapa.id,
+          id: prompt.id,
           agent_ia_id: agentId,
-          numero: etapa.numero,
-          tipo: etapa.tipo === 'INICIO' ? 'INICIO' : etapa.tipo === 'FINAL' ? 'FINAL' : null,
-          nome: etapa.nome,
-          descricao: etapa.descricao,
+          numero: 1,
+          tipo: null,
+          nome: prompt.nome,
+          descricao: prompt.descricao,
         });
 
       if (error) throw error;
-
-      toast.success(`Etapa "${etapa.nome}" salva com sucesso`);
-      toggleEtapa(id);
+      toast.success('Prompt do agente salvo com sucesso');
     } catch (error) {
-      console.error('Erro ao salvar etapa:', error);
-      toast.error('Erro ao salvar etapa');
+      console.error('Erro ao salvar prompt:', error);
+      toast.error('Erro ao salvar prompt');
     } finally {
       setSaving(false);
     }
@@ -997,236 +913,95 @@ function EtapasAtendimentoTab({
     );
   }
 
+  if (!prompt) return null;
+
   return (
     <div className="space-y-6 max-w-4xl">
       <AcaoInteligenteModal
-        isOpen={modalDecisao.isOpen}
-        onClose={() => setModalDecisao(prev => ({ ...prev, isOpen: false }))}
-        onInsert={handleDecisaoInsert}
+        isOpen={modalAcao}
+        onClose={() => setModalAcao(false)}
+        onInsert={handleAcaoInsert}
         agentId={agentId}
       />
 
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-card rounded-2xl p-6 w-full max-w-md border border-border shadow-2xl animate-scale-in">
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              Confirmar Exclusão
-            </h3>
-            <p className="text-muted-foreground mb-6">
-              Tem certeza que deseja excluir a etapa "{confirmDelete.nome}"? 
-              Esta ação não pode ser desfeita.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button 
-                onClick={() => setConfirmDelete(null)}
-                className="px-4 py-2 rounded-xl border border-border text-foreground hover:bg-muted transition-colors"
-              >
-                Cancelar
-              </button>
-              <button 
-                onClick={confirmDeleteEtapa}
-                className="px-4 py-2 rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
-              >
-                Excluir
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-            <MessageCircle className="h-6 w-6 text-emerald-500" />
-          </div>
-          <div>
-            <h2 className="text-xl font-bold text-foreground">Etapas de Atendimento</h2>
-            <p className="text-sm text-muted-foreground">
-              Configure o fluxo de conversação do agente
-            </p>
-          </div>
+      <div className="flex items-center gap-4 mb-6">
+        <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+          <MessageCircle className="h-6 w-6 text-emerald-500" />
         </div>
-        <button 
-          onClick={addEtapa}
-          className="flex items-center gap-2 h-11 px-5 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/25"
-        >
-          <Plus className="h-4 w-4" />
-          Nova Etapa
-        </button>
+        <div>
+          <h2 className="text-xl font-bold text-foreground">Prompt do Agente</h2>
+          <p className="text-sm text-muted-foreground">
+            Configure o comportamento e fluxo de atendimento do agente
+          </p>
+        </div>
       </div>
 
-      {/* Timeline */}
-      <div className="relative space-y-4">
-        {/* Vertical Line */}
-        {etapas.length > 1 && (
-          <div className="absolute left-[23px] top-8 bottom-8 w-0.5 bg-gradient-to-b from-emerald-500/50 via-emerald-500/30 to-emerald-500/10" />
-        )}
+      {/* Editor Card - sempre aberto */}
+      <Card className="border-emerald-500/30 shadow-lg shadow-emerald-500/10">
+        <CardContent className="p-6 space-y-4">
+          {/* Nome do Prompt */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">
+              Nome do Prompt
+            </label>
+            <input
+              type="text"
+              value={prompt.nome}
+              onChange={(e) => setPrompt({ ...prompt, nome: e.target.value })}
+              className="w-full h-11 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+              placeholder="Ex: Prompt Principal"
+            />
+          </div>
 
-        {etapas.map((etapa, index) => (
-          <Card 
-            key={etapa.id}
-            className={`relative transition-all duration-300 ${
-              etapa.expandido ? 'border-emerald-500/30 shadow-lg shadow-emerald-500/10' : 'hover:border-border/80'
-            }`}
-          >
-            <CardContent className="p-0">
-              <div className="flex items-center gap-4 p-4">
-                {/* Step Number */}
-                <div className={`relative z-10 flex items-center justify-center h-12 w-12 rounded-xl text-sm font-bold transition-all ${
-                  etapa.expandido 
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' 
-                    : 'bg-muted text-muted-foreground'
-                }`}>
-                  {etapa.numero}
-                </div>
-                
-                {/* Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    {etapa.tipo && (
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                        etapa.tipo === 'INICIO' 
-                          ? 'bg-emerald-500/15 text-emerald-500' 
-                          : 'bg-amber-500/15 text-amber-500'
-                      }`}>
-                        {etapa.tipo}
-                      </span>
-                    )}
-                  </div>
-                  <h3 className="font-semibold text-foreground truncate">{etapa.nome}</h3>
-                  {!etapa.expandido && etapa.descricao && (
-                    <p className="text-sm text-muted-foreground truncate mt-0.5">
-                      {extractTextFromTiptapJson(etapa.descricao).substring(0, 80)}...
-                    </p>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleEtapa(etapa.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                      etapa.expandido 
-                        ? 'bg-emerald-500/10 text-emerald-500' 
-                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                    }`}
-                  >
-                    {etapa.expandido ? (
-                      <>
-                        <ChevronUp className="h-4 w-4" />
-                        Fechar
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown className="h-4 w-4" />
-                        Editar
-                      </>
-                    )}
-                  </button>
-
-                  <button 
-                    onClick={() => handleDeleteClick(etapa)}
-                    className="p-2 rounded-xl hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Expanded Content */}
-              {etapa.expandido && (
-                <div className="px-4 pb-4 pt-2 border-t border-border animate-fade-in">
-                  <div className="space-y-4 ml-16">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">
-                        Nome da Etapa
-                      </label>
-                      <input
-                        type="text"
-                        value={etapa.nome}
-                        onChange={(e) => updateEtapa(etapa.id, 'nome', e.target.value)}
-                        className="w-full h-11 px-4 rounded-xl bg-muted/50 border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-foreground">
-                          Descrição / Comportamento
-                        </label>
-                        <button 
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            const savedPos = cursorPositionsByEtapa.current[etapa.id] ?? etapa.descricao.length;
-                            abrirModalDecisao(etapa.id, savedPos);
-                          }}
-                        >
-                          <Sparkles className="h-3.5 w-3.5" />
-                          @ Ação Inteligente
-                        </button>
-                      </div>
-                      
-                      <RichTextEditor
-                        value={etapa.descricao}
-                        onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
-                        placeholder="Descreva o comportamento desta etapa..."
-                        onAcaoClick={(cursorPos) => abrirModalDecisao(etapa.id, cursorPos)}
-                      />
-                      <p className="text-xs text-muted-foreground mt-2">
-                        💡 Digite <span className="text-emerald-500 font-medium">@</span> para inserir ações inteligentes
-                      </p>
-                    </div>
-
-                    <div className="flex justify-end pt-2">
-                      <button 
-                        onClick={() => saveEtapa(etapa.id)}
-                        disabled={saving}
-                        className="flex items-center gap-2 h-10 px-5 rounded-xl bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                      >
-                        {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                        Salvar Etapa
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {etapas.length === 0 && (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-16">
-            <div className="h-16 w-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mb-4">
-              <Layers className="h-8 w-8 text-emerald-500/50" />
+          {/* Descrição / Comportamento */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-foreground">
+                Descrição / Comportamento
+              </label>
+              <button 
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 transition-colors"
+                onClick={() => setModalAcao(true)}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                @ Ação Inteligente
+              </button>
             </div>
-            <h3 className="font-semibold text-foreground mb-1">Nenhuma etapa configurada</h3>
-            <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
-              Adicione etapas para definir o fluxo de atendimento do agente
-            </p>
-            <button 
-              onClick={addEtapa}
-              className="flex items-center gap-2 h-11 px-5 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Criar Primeira Etapa
-            </button>
-          </CardContent>
-        </Card>
-      )}
+            
+            <RichTextEditor
+              value={prompt.descricao}
+              onChange={(value) => setPrompt({ ...prompt, descricao: value })}
+              placeholder="Descreva o comportamento do agente...
 
-      {etapas.length > 0 && (
-        <button 
-          onClick={addEtapa}
-          className="w-full flex items-center justify-center gap-2 h-14 rounded-xl border-2 border-dashed border-border text-muted-foreground hover:border-emerald-500/50 hover:text-emerald-500 hover:bg-emerald-500/5 transition-all"
-        >
-          <Plus className="h-5 w-5" />
-          Adicionar Nova Etapa
-        </button>
-      )}
+Exemplos de instruções:
+- Apresente-se e pergunte o nome do cliente
+- Colete informações sobre as necessidades
+- Ofereça os produtos/serviços relevantes
+- Use ações inteligentes para automatizar tarefas"
+              onAcaoClick={() => setModalAcao(true)}
+            />
+            <p className="text-xs text-muted-foreground mt-2">
+              💡 Digite <span className="text-emerald-500 font-medium">@</span> para inserir ações inteligentes
+            </p>
+          </div>
+
+          {/* Character count */}
+          <div className="pt-2 flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              {(prompt.nome?.length || 0) + (prompt.descricao?.length || 0)} caracteres
+            </span>
+            <button 
+              onClick={savePrompt}
+              disabled={saving}
+              className="flex items-center gap-2 h-10 px-5 rounded-xl bg-emerald-500 text-white text-sm font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 shadow-lg shadow-emerald-500/25"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar Prompt
+            </button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

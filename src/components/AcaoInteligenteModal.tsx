@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Tag, UserRound, Bot, Globe, Layers, Bell, Package, StopCircle,
   Check, AlertCircle, Loader2, UserPen, Handshake, CalendarSearch, CalendarPlus,
-  FileEdit, FileSearch, ArrowRightCircle, UserCheck
+  FileEdit, FileSearch, UserCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -158,14 +158,6 @@ const tiposAcao: AcaoTipo[] = [
     icon: FileSearch,
     color: 'hsl(45 80% 50%)',
     bgColor: 'hsl(45 80% 50% / 0.1)',
-  },
-  {
-    id: 'ir-etapa',
-    label: 'Ir para Etapa',
-    description: 'Avança para outra etapa do fluxo',
-    icon: ArrowRightCircle,
-    color: 'hsl(270 80% 50%)',
-    bgColor: 'hsl(270 80% 50% / 0.1)',
   },
   {
     id: 'verificar-cliente',
@@ -337,8 +329,6 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert, agentId }: Aca
       case 'campo':
       case 'obter':
         return campoSelecionado !== '';
-      case 'ir-etapa':
-        return etapaAgenteSelecionada !== '';
       default:
         return false;
     }
@@ -410,8 +400,6 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert, agentId }: Aca
         const campoSlug = campo?.nome.toLowerCase().replace(/\s+/g, '-') || campoSelecionado;
         return `@obter:${campoSlug}`;
       }
-      case 'ir-etapa':
-        return `@ir_etapa:${etapaAgenteSelecionada}`;
       case 'verificar-cliente':
         return '@verificar_cliente';
       default:
@@ -901,39 +889,6 @@ export function AcaoInteligenteModal({ isOpen, onClose, onInsert, agentId }: Aca
                   </div>
                 )}
 
-                {tipoSelecionado === 'ir-etapa' && (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-foreground mb-2">Selecione a Etapa de Destino</label>
-                      <select
-                        value={etapaAgenteSelecionada}
-                        onChange={(e) => setEtapaAgenteSelecionada(e.target.value)}
-                        className="w-full h-10 px-3 rounded-lg bg-input border border-border text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
-                      >
-                        <option value="">Selecione uma etapa...</option>
-                        {etapasAgente.map(etapa => (
-                          <option key={etapa.numero} value={etapa.numero}>
-                            Etapa {etapa.numero}: {etapa.nome}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="p-4 rounded-lg bg-violet-100 dark:bg-violet-900/30 border border-violet-300 dark:border-violet-700">
-                      <p className="text-sm text-violet-700 dark:text-violet-300 mb-1">
-                        ➡️ <strong>Avançar no Fluxo</strong>
-                      </p>
-                      <p className="text-xs text-violet-600 dark:text-violet-400">
-                        O agente irá mover a conversa para a etapa selecionada do fluxo de atendimento.
-                        O próximo comportamento do agente seguirá as regras da nova etapa.
-                      </p>
-                    </div>
-                    {etapasAgente.length === 0 && (
-                      <p className="text-xs text-amber-600 dark:text-amber-400">
-                        ⚠️ Este agente não possui etapas cadastradas. Adicione etapas na aba "Etapas de Atendimento".
-                      </p>
-                    )}
-                  </div>
-                )}
 
                 {isProntoParaInserir() && (
                   <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/20">

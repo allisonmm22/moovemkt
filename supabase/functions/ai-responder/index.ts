@@ -65,7 +65,7 @@ interface AIResponse {
 }
 
 interface Acao {
-  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'ir_etapa' | 'verificar_cliente';
+  tipo: 'etapa' | 'tag' | 'transferir' | 'notificar' | 'finalizar' | 'nome' | 'negociacao' | 'agenda' | 'campo' | 'obter' | 'followup' | 'verificar_cliente';
   valor?: string;
   calendario_id?: string;
 }
@@ -106,11 +106,11 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
   
   // Regex para ações com valor entre aspas (permite espaços)
   // Formato: @campo:nome-campo:"valor com espaços"
-  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa|verificar_cliente):([^\s@:]+):"([^"]+)"/gi;
+  const regexComAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|verificar_cliente):([^\s@:]+):"([^"]+)"/gi;
   
   // Regex para ações sem aspas (formato original, sem espaços no valor)
   // Formato: @campo:nome-campo:valor-sem-espacos ou @etapa:nome-etapa ou @ir_etapa:numero ou @verificar_cliente
-  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|ir_etapa|verificar_cliente)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
+  const regexSemAspas = /@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|followup|verificar_cliente)(?::([^\s@:]+)(?::([^\s@"]+))?)?/gi;
   
   // Primeiro, processar ações com aspas
   const matchesComAspas = [...texto.matchAll(regexComAspas)];
@@ -1891,74 +1891,6 @@ serve(async (req) => {
         // Pular ação verificar_cliente - já foi executada durante tool-calling
         if (acao.tipo === 'verificar_cliente') {
           console.log('Pulando ação verificar_cliente (já executada durante tool-calling)');
-          continue;
-        }
-        
-        // Processar ação @ir_etapa para avançar etapa no fluxo de atendimento
-        if (acao.tipo === 'ir_etapa' && acao.valor) {
-          const numeroEtapa = parseInt(acao.valor, 10);
-          if (!isNaN(numeroEtapa)) {
-            console.log('📍 [IR_ETAPA] Avançando para etapa número:', numeroEtapa);
-            
-            // Buscar a etapa pelo número COM descrição completa
-            const { data: etapas } = await supabase
-              .from('agent_ia_etapas')
-              .select('id, nome, numero, descricao')
-              .eq('agent_ia_id', agente.id)
-              .eq('numero', numeroEtapa)
-              .limit(1);
-            
-            if (etapas && etapas.length > 0) {
-              const novaEtapa = etapas[0];
-              console.log('📍 [IR_ETAPA] Etapa encontrada:', novaEtapa.nome);
-              
-              // Atualizar a conversa com a nova etapa
-              const { error: updateError } = await supabase
-                .from('conversas')
-                .update({ etapa_ia_atual: novaEtapa.id })
-                .eq('id', conversa_id);
-              
-              if (updateError) {
-                console.error('📍 [IR_ETAPA] Erro ao atualizar etapa:', updateError);
-              } else {
-                console.log('📍 [IR_ETAPA] Etapa atualizada com sucesso para:', novaEtapa.nome);
-                
-                // 🆕 Guardar dados da nova etapa para gerar resposta baseada nela
-                novaEtapaExecutada = {
-                  id: novaEtapa.id,
-                  nome: novaEtapa.nome,
-                  numero: novaEtapa.numero,
-                  descricao: novaEtapa.descricao || null,
-                };
-                console.log('📍 [IR_ETAPA] Dados da nova etapa guardados para gerar nova resposta');
-                
-                // Registrar mensagem de sistema para rastreamento histórico
-                await supabase
-                  .from('mensagens')
-                  .insert({
-                    conversa_id,
-                    conta_id: conta_id,
-                    conteudo: `📍 Lead avançou para Etapa ${novaEtapa.numero}: ${novaEtapa.nome}`,
-                    direcao: 'saida',
-                    tipo: 'sistema',
-                    enviada_por_ia: true,
-                    metadata: { 
-                      interno: true, 
-                      acao_tipo: 'ir_etapa',
-                      etapa_ia_id: novaEtapa.id,
-                      etapa_nome: novaEtapa.nome,
-                      etapa_numero: novaEtapa.numero,
-                      executado_por: 'agente_ia',
-                      agente_id: agente.id,
-                    }
-                  });
-                
-                console.log('📍 [IR_ETAPA] Mensagem de rastreamento registrada');
-              }
-            } else {
-              console.log('📍 [IR_ETAPA] Etapa não encontrada para número:', numeroEtapa);
-            }
-          }
           continue;
         }
         
