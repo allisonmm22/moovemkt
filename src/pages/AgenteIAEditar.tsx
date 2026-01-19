@@ -11,7 +11,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';
-import { DescricaoEditor } from '@/components/DescricaoEditor';
+import { RichTextEditor, inserirAcaoNoRichEditor } from '@/components/RichTextEditor';
+import { DescricaoEditor, inserirAcaoNoEditor } from '@/components/DescricaoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -1166,7 +1167,7 @@ function EtapasAtendimentoTab({
                         </button>
                       </div>
                       
-                      <DescricaoEditor
+                      <RichTextEditor
                         value={etapa.descricao}
                         onChange={(value) => updateEtapa(etapa.id, 'descricao', value)}
                         placeholder="Descreva o comportamento desta etapa..."
