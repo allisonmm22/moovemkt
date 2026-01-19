@@ -8,6 +8,7 @@ import {
   Timer, SplitSquareHorizontal, CalendarCheck
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { extractTextFromTiptapJson } from '@/lib/richTextUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';
@@ -1096,7 +1097,7 @@ function EtapasAtendimentoTab({
                   <h3 className="font-semibold text-foreground truncate">{etapa.nome}</h3>
                   {!etapa.expandido && etapa.descricao && (
                     <p className="text-sm text-muted-foreground truncate mt-0.5">
-                      {etapa.descricao.substring(0, 80)}...
+                      {extractTextFromTiptapJson(etapa.descricao).substring(0, 80)}...
                     </p>
                   )}
                 </div>
