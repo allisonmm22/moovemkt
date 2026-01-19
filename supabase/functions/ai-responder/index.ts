@@ -7,6 +7,51 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Extracts readable text from Tiptap JSON content, preserving actions and basic formatting
+function extractTextFromTiptapJson(value: string): string {
+  if (!value) return '';
+  
+  try {
+    const json = JSON.parse(value);
+    
+    const extractFromNode = (node: any): string => {
+      if (node.type === 'text') {
+        let text = node.text || '';
+        if (node.marks) {
+          for (const mark of node.marks) {
+            if (mark.type === 'bold') text = `**${text}**`;
+            if (mark.type === 'italic') text = `*${text}*`;
+          }
+        }
+        return text;
+      }
+      if (node.type === 'action') {
+        return node.attrs?.action || '';
+      }
+      if (node.type === 'hardBreak') {
+        return '\n';
+      }
+      if (node.content && Array.isArray(node.content)) {
+        const text = node.content.map(extractFromNode).join('');
+        if (node.type === 'paragraph') return text + '\n';
+        if (node.type === 'heading') {
+          const level = node.attrs?.level || 1;
+          return '#'.repeat(level) + ' ' + text + '\n';
+        }
+        if (node.type === 'listItem') return '- ' + text;
+        if (node.type === 'bulletList' || node.type === 'orderedList') return text + '\n';
+        if (node.type === 'blockquote') return '> ' + text + '\n';
+        return text;
+      }
+      return '';
+    };
+    
+    return json.content?.map(extractFromNode).join('').trim() || '';
+  } catch {
+    return value; // Return as-is if not valid JSON
+  }
+}
+
 interface AIResponse {
   resposta: string;
   provider: 'openai';
@@ -1428,7 +1473,8 @@ serve(async (req) => {
         
         promptCompleto += 'Siga RIGOROSAMENTE as instruções desta etapa. NÃO volte para etapas anteriores:\n\n';
         if (etapaAtual.descricao) {
-          promptCompleto += `${etapaAtual.descricao}\n\n`;
+          const descricaoTexto = extractTextFromTiptapJson(etapaAtual.descricao);
+          promptCompleto += `${descricaoTexto}\n\n`;
         }
         
         // Adicionar próxima etapa para progressão natural
@@ -1439,8 +1485,9 @@ serve(async (req) => {
           promptCompleto += `**Etapa ${proximaEtapa.numero}: ${proximaEtapa.nome}**\n`;
           if (proximaEtapa.descricao) {
             // Mostrar apenas resumo da próxima etapa (primeiras 300 caracteres)
-            const resumo = proximaEtapa.descricao.substring(0, 300);
-            promptCompleto += `Resumo: ${resumo}${proximaEtapa.descricao.length > 300 ? '...' : ''}\n`;
+            const descricaoProxTexto = extractTextFromTiptapJson(proximaEtapa.descricao);
+            const resumo = descricaoProxTexto.substring(0, 300);
+            promptCompleto += `Resumo: ${resumo}${descricaoProxTexto.length > 300 ? '...' : ''}\n`;
           }
         } else {
           promptCompleto += '\n*Esta é a última etapa do fluxo de atendimento.*\n';
