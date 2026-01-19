@@ -285,6 +285,17 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
         .ProseMirror em {
           font-style: italic;
         }
+        
+        .ProseMirror .inline-action-wrapper {
+          display: inline-flex !important;
+          align-items: center;
+          vertical-align: middle;
+        }
+        
+        .ProseMirror span[data-node-view-wrapper] {
+          display: inline-flex !important;
+          align-items: center;
+        }
       `}</style>
     </div>
   );

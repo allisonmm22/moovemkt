@@ -158,7 +158,7 @@ export const ActionChipNode: React.FC<NodeViewProps> = ({ node, deleteNode }) =>
   const Icon = config.icon;
 
   return (
-    <NodeViewWrapper as="span" className="inline">
+    <NodeViewWrapper as="span" style={{ display: 'inline-flex', alignItems: 'center' }}>
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
