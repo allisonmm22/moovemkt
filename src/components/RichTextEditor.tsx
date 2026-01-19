@@ -191,21 +191,29 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
       },
     },
     onUpdate: ({ editor }) => {
-      // Get content as text but preserve action nodes
+      // Save as JSON to preserve all formatting
       const json = editor.getJSON();
-      const text = extractTextWithActions(json);
-      onChange(text);
+      onChange(JSON.stringify(json));
     },
   });
 
   // Sync external value changes
   useEffect(() => {
-    if (editor) {
-      const currentText = extractTextWithActions(editor.getJSON());
-      if (value !== currentText) {
-        // Parse value to find actions and convert to proper nodes
+    if (editor && value) {
+      try {
+        // Try to parse as JSON first (new format)
+        const parsedContent = JSON.parse(value);
+        const currentJson = JSON.stringify(editor.getJSON());
+        if (value !== currentJson) {
+          editor.commands.setContent(parsedContent);
+        }
+      } catch {
+        // If not valid JSON, it's legacy plain text - convert it
         const content = parseValueToContent(value);
-        editor.commands.setContent(content);
+        const currentText = extractTextWithActions(editor.getJSON());
+        if (value !== currentText) {
+          editor.commands.setContent(content);
+        }
       }
     }
   }, [value, editor]);
@@ -388,20 +396,51 @@ function parseValueToContent(value: string): any {
   };
 }
 
-// Helper function to insert action
+// Helper function to insert action into JSON content
 export function inserirAcaoNoRichEditor(
   currentValue: string,
   action: string,
   onChange: (value: string) => void,
   cursorPosition?: number
 ) {
-  const insertPosition = cursorPosition ?? currentValue.length;
-  
-  const before = currentValue.substring(0, insertPosition);
-  const after = currentValue.substring(insertPosition);
-  const needsSpaceBefore = before.length > 0 && before[before.length - 1] !== ' ' && before[before.length - 1] !== '\n';
-  const needsSpaceAfter = after.length > 0 && after[0] !== ' ' && after[0] !== '\n';
-  
-  const newValue = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
-  onChange(newValue);
+  try {
+    // Try to parse as JSON
+    const json = JSON.parse(currentValue);
+    
+    // Find the last paragraph and append the action to it
+    if (json.content && json.content.length > 0) {
+      const lastParagraph = json.content[json.content.length - 1];
+      if (!lastParagraph.content) {
+        lastParagraph.content = [];
+      }
+      
+      // Add space before if needed
+      const lastNode = lastParagraph.content[lastParagraph.content.length - 1];
+      if (lastNode && lastNode.type === 'text' && lastNode.text && !lastNode.text.endsWith(' ')) {
+        lastParagraph.content.push({ type: 'text', text: ' ' });
+      }
+      
+      // Add action node
+      lastParagraph.content.push({
+        type: 'action',
+        attrs: { action }
+      });
+      
+      // Add trailing space
+      lastParagraph.content.push({ type: 'text', text: ' ' });
+    }
+    
+    onChange(JSON.stringify(json));
+  } catch {
+    // Fallback for legacy text format
+    const insertPosition = cursorPosition ?? currentValue.length;
+    
+    const before = currentValue.substring(0, insertPosition);
+    const after = currentValue.substring(insertPosition);
+    const needsSpaceBefore = before.length > 0 && before[before.length - 1] !== ' ' && before[before.length - 1] !== '\n';
+    const needsSpaceAfter = after.length > 0 && after[0] !== ' ' && after[0] !== '\n';
+    
+    const newValue = before + (needsSpaceBefore ? ' ' : '') + action + (needsSpaceAfter ? ' ' : '') + after;
+    onChange(newValue);
+  }
 }
