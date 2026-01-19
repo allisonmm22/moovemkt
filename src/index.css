@@ -6,68 +6,72 @@
 
 @layer base {
   :root {
-    /* Cores do tema escuro profissional */
-    --background: 222 47% 6%;
-    --foreground: 210 40% 98%;
+    /* TEMA HÍBRIDO PROFISSIONAL: Conteúdo claro + Sidebar escura */
+    
+    /* Background principal - BRANCO */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
 
-    --card: 222 47% 8%;
-    --card-foreground: 210 40% 98%;
+    /* Cards - Off-white */
+    --card: 210 40% 98%;
+    --card-foreground: 222 47% 11%;
 
-    --popover: 222 47% 10%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
 
-    /* Verde WhatsApp como primário */
-    --primary: 142 70% 45%;
+    /* COR PRIMÁRIA - Turquesa/Teal profissional */
+    --primary: 168 76% 42%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 47% 14%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 222 47% 16%;
-    --muted-foreground: 215 20% 55%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 142 70% 45%;
+    --accent: 168 76% 42%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 222 47% 18%;
-    --input: 222 47% 14%;
-    --ring: 142 70% 45%;
+    /* Bordas claras */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 168 76% 42%;
 
     --radius: 0.75rem;
 
     /* Cores adicionais para o CRM */
-    --success: 142 70% 45%;
+    --success: 168 76% 42%;
     --warning: 38 92% 50%;
     --info: 217 91% 60%;
 
     /* Cores para status */
-    --online: 142 70% 45%;
+    --online: 168 76% 42%;
     --offline: 0 0% 50%;
     --away: 38 92% 50%;
 
-    /* Gradientes */
-    --gradient-primary: linear-gradient(135deg, hsl(142 70% 45%) 0%, hsl(160 70% 40%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(222 47% 10%) 0%, hsl(222 47% 8%) 100%);
-    --gradient-sidebar: linear-gradient(180deg, hsl(222 47% 7%) 0%, hsl(222 47% 5%) 100%);
+    /* Gradientes atualizados */
+    --gradient-primary: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(175 70% 38%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(210 40% 99%) 0%, hsl(210 40% 98%) 100%);
+    --gradient-sidebar: linear-gradient(180deg, hsl(210 50% 12%) 0%, hsl(210 50% 8%) 100%);
 
-    /* Sombras */
-    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.4), 0 2px 4px -2px hsl(0 0% 0% / 0.3);
-    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.5), 0 4px 6px -4px hsl(0 0% 0% / 0.4);
-    --shadow-glow: 0 0 20px hsl(142 70% 45% / 0.3);
+    /* Sombras suaves para tema claro */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+    --shadow-glow: 0 0 20px hsl(168 76% 42% / 0.25);
 
-    /* Sidebar */
-    --sidebar-background: 222 47% 5%;
-    --sidebar-foreground: 210 40% 85%;
-    --sidebar-primary: 142 70% 45%;
+    /* SIDEBAR - Mantém escura para contraste */
+    --sidebar-background: 210 50% 10%;
+    --sidebar-foreground: 210 40% 80%;
+    --sidebar-primary: 168 76% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 47% 12%;
+    --sidebar-accent: 210 50% 15%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 222 47% 14%;
-    --sidebar-ring: 142 70% 45%;
+    --sidebar-border: 210 50% 15%;
+    --sidebar-ring: 168 76% 42%;
   }
 }
 
@@ -81,22 +85,23 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
 
-  /* Scrollbar personalizada */
+  /* Scrollbar personalizada para tema claro */
   ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-background;
+    background: hsl(210 40% 96%);
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply bg-muted rounded-full;
+    background: hsl(215 16% 75%);
+    border-radius: 9999px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-muted-foreground/50;
+    background: hsl(215 16% 60%);
   }
 }
 
@@ -130,15 +135,15 @@
 
   /* Status indicators */
   .status-online {
-    @apply bg-green-500;
+    background: hsl(168 76% 42%);
   }
 
   .status-offline {
-    @apply bg-gray-500;
+    background: hsl(215 16% 60%);
   }
 
   .status-away {
-    @apply bg-yellow-500;
+    background: hsl(38 92% 50%);
   }
 
   /* Glassmorphism effect */
@@ -153,7 +158,7 @@
   }
 
   .conversation-card:hover {
-    @apply bg-muted/70;
+    background: hsl(210 40% 96%);
     transform: translateX(2px);
   }
 
@@ -172,13 +177,13 @@
   }
 
   .message-bubble-sent {
-    background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(160 70% 40%) 100%);
-    box-shadow: 0 2px 8px hsl(var(--primary) / 0.25);
+    background: linear-gradient(135deg, hsl(168 76% 42%) 0%, hsl(175 70% 38%) 100%);
+    box-shadow: 0 2px 8px hsl(168 76% 42% / 0.25);
   }
 
   .message-bubble-received {
-    @apply bg-muted;
-    box-shadow: 0 2px 8px hsl(0 0% 0% / 0.15);
+    background: hsl(210 40% 96%);
+    box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
   }
 
   /* Typing indicator */
@@ -187,7 +192,10 @@
   }
 
   .typing-dot {
-    @apply w-2 h-2 rounded-full bg-muted-foreground/60;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: hsl(215 16% 60%);
     animation: typingDot 1.4s ease-in-out infinite;
   }
 
@@ -274,10 +282,10 @@
 
 @keyframes onlinePulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 hsl(142 70% 45% / 0.4);
+    box-shadow: 0 0 0 0 hsl(168 76% 42% / 0.4);
   }
   50% {
-    box-shadow: 0 0 0 6px hsl(142 70% 45% / 0);
+    box-shadow: 0 0 0 6px hsl(168 76% 42% / 0);
   }
 }
 
@@ -323,10 +331,10 @@
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 5px hsl(142 70% 45% / 0.5);
+    box-shadow: 0 0 5px hsl(168 76% 42% / 0.5);
   }
   50% {
-    box-shadow: 0 0 20px hsl(142 70% 45% / 0.8);
+    box-shadow: 0 0 20px hsl(168 76% 42% / 0.8);
   }
 }
 
