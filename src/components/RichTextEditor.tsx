@@ -1,16 +1,14 @@
-import { useEffect, useCallback, useMemo, memo, forwardRef, useState, useRef } from 'react';
+import { useEffect, useCallback, useMemo, memo, forwardRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { 
   Bold, Italic, Code, Heading1, Heading2, Heading3, 
-  Quote, List, ListOrdered, 
-  Tag, Bot, UserRound, Globe, Layers, Bell, Package, StopCircle, UserPen, 
-  Handshake, X, CalendarSearch, CalendarPlus, FileEdit, FileSearch, 
-  ArrowRightCircle, UserCheck
+  Quote, List, ListOrdered
 } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { ActionNode } from '@/components/editor/ActionNode';
 
 interface RichTextEditorProps {
   value: string;
@@ -18,248 +16,6 @@ interface RichTextEditorProps {
   placeholder?: string;
   onAcaoClick?: (cursorPosition: number) => void;
 }
-
-interface ChipConfig {
-  icon: React.ElementType;
-  label: string;
-  colorClass: string;
-  bgClass: string;
-}
-
-// Parse ação para config visual
-const acaoConfigCache = new Map<string, ChipConfig>();
-
-function parseAcao(acao: string): ChipConfig {
-  const cached = acaoConfigCache.get(acao);
-  if (cached) return cached;
-  
-  const acaoLower = acao.toLowerCase();
-  let config: ChipConfig;
-  
-  if (acaoLower.startsWith('@nome:')) {
-    const valor = acao.replace(/^@nome:/i, '');
-    config = {
-      icon: UserPen,
-      label: `Alterar Nome: ${valor}`,
-      colorClass: 'text-amber-700 dark:text-amber-400',
-      bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
-    };
-  } else if (acaoLower === '@nome') {
-    config = {
-      icon: UserPen,
-      label: 'Capturar Nome',
-      colorClass: 'text-amber-700 dark:text-amber-400',
-      bgClass: 'bg-amber-100 dark:bg-amber-900/40 border-amber-300 dark:border-amber-700',
-    };
-  } else if (acaoLower.startsWith('@tag:')) {
-    const valor = acao.replace(/^@tag:/i, '');
-    config = {
-      icon: Tag,
-      label: `Adicionar Tag: ${valor}`,
-      colorClass: 'text-blue-700 dark:text-blue-400',
-      bgClass: 'bg-blue-100 dark:bg-blue-900/40 border-blue-300 dark:border-blue-700',
-    };
-  } else if (acaoLower.startsWith('@negociacao:')) {
-    const valor = acao.replace(/^@negociacao:/i, '');
-    config = {
-      icon: Handshake,
-      label: `Criar Negociação: ${valor}`,
-      colorClass: 'text-orange-700 dark:text-orange-400',
-      bgClass: 'bg-orange-100 dark:bg-orange-900/40 border-orange-300 dark:border-orange-700',
-    };
-  } else if (acaoLower.startsWith('@etapa:')) {
-    const valor = acao.replace(/^@etapa:/i, '');
-    config = {
-      icon: Layers,
-      label: `Mover para Estágio: ${valor}`,
-      colorClass: 'text-purple-700 dark:text-purple-400',
-      bgClass: 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700',
-    };
-  } else if (acaoLower.startsWith('@transferir:humano') || acaoLower.startsWith('@transferir:usuario:')) {
-    const valor = acaoLower === '@transferir:humano' 
-      ? 'Atendente' 
-      : acao.replace(/^@transferir:usuario:/i, '');
-    config = {
-      icon: UserRound,
-      label: `Transferir para: ${valor}`,
-      colorClass: 'text-green-700 dark:text-green-400',
-      bgClass: 'bg-green-100 dark:bg-green-900/40 border-green-300 dark:border-green-700',
-    };
-  } else if (acaoLower.startsWith('@transferir:ia') || acaoLower.startsWith('@transferir:agente:')) {
-    const valor = acaoLower === '@transferir:ia' 
-      ? 'IA Principal' 
-      : acao.replace(/^@transferir:agente:/i, '');
-    config = {
-      icon: Bot,
-      label: `Transferir Agente: ${valor}`,
-      colorClass: 'text-indigo-700 dark:text-indigo-400',
-      bgClass: 'bg-indigo-100 dark:bg-indigo-900/40 border-indigo-300 dark:border-indigo-700',
-    };
-  } else if (acaoLower.startsWith('@fonte:')) {
-    const valor = acao.replace(/^@fonte:/i, '');
-    config = {
-      icon: Globe,
-      label: `Atribuir Fonte: ${valor}`,
-      colorClass: 'text-teal-700 dark:text-teal-400',
-      bgClass: 'bg-teal-100 dark:bg-teal-900/40 border-teal-300 dark:border-teal-700',
-    };
-  } else if (acaoLower.startsWith('@notificar:')) {
-    const valor = acao.replace(/^@notificar:/i, '');
-    config = {
-      icon: Bell,
-      label: `Notificar: ${valor.substring(0, 30)}${valor.length > 30 ? '...' : ''}`,
-      colorClass: 'text-red-700 dark:text-red-400',
-      bgClass: 'bg-red-100 dark:bg-red-900/40 border-red-300 dark:border-red-700',
-    };
-  } else if (acaoLower.startsWith('@produto:')) {
-    const valor = acao.replace(/^@produto:/i, '');
-    config = {
-      icon: Package,
-      label: `Atribuir Produto: ${valor}`,
-      colorClass: 'text-emerald-700 dark:text-emerald-400',
-      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
-    };
-  } else if (acaoLower === '@finalizar') {
-    config = {
-      icon: StopCircle,
-      label: 'Interromper Agente',
-      colorClass: 'text-gray-700 dark:text-gray-400',
-      bgClass: 'bg-gray-100 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600',
-    };
-  } else if (acaoLower.startsWith('@agenda:consultar:')) {
-    const valor = acao.replace(/^@agenda:consultar:/i, '');
-    config = {
-      icon: CalendarSearch,
-      label: `Consultar Agenda: ${valor}`,
-      colorClass: 'text-sky-700 dark:text-sky-400',
-      bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
-    };
-  } else if (acaoLower === '@agenda:consultar') {
-    config = {
-      icon: CalendarSearch,
-      label: 'Consultar Agenda',
-      colorClass: 'text-sky-700 dark:text-sky-400',
-      bgClass: 'bg-sky-100 dark:bg-sky-900/40 border-sky-300 dark:border-sky-700',
-    };
-  } else if (acaoLower.startsWith('@agenda:criar:')) {
-    const partes = acao.replace(/^@agenda:criar:/i, '').split(':');
-    const calendario = partes[0] || '';
-    const duracao = partes[1] ? `${partes[1]}min` : '';
-    const hasMeet = partes[2] === 'meet';
-    
-    let label = `Criar Evento: ${calendario}`;
-    if (duracao) {
-      label += ` (${duracao}${hasMeet ? ' + Meet' : ''})`;
-    }
-    
-    config = {
-      icon: CalendarPlus,
-      label,
-      colorClass: 'text-emerald-700 dark:text-emerald-400',
-      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
-    };
-  } else if (acaoLower === '@agenda:criar') {
-    config = {
-      icon: CalendarPlus,
-      label: 'Criar Evento',
-      colorClass: 'text-emerald-700 dark:text-emerald-400',
-      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
-    };
-  } else if (acaoLower.startsWith('@campo:')) {
-    const valor = acao.replace(/^@campo:/i, '');
-    const partes = valor.split(':');
-    const nomeCampo = partes[0]?.replace(/-/g, ' ') || valor;
-    const valorCampo = partes.slice(1).join(':');
-    
-    const label = valorCampo 
-      ? `Atualizar ${nomeCampo}: ${valorCampo}`
-      : `Atualizar Campo: ${nomeCampo}`;
-    
-    config = {
-      icon: FileEdit,
-      label,
-      colorClass: 'text-violet-700 dark:text-violet-400',
-      bgClass: 'bg-violet-100 dark:bg-violet-900/40 border-violet-300 dark:border-violet-700',
-    };
-  } else if (acaoLower.startsWith('@obter:')) {
-    const valor = acao.replace(/^@obter:/i, '').replace(/-/g, ' ');
-    config = {
-      icon: FileSearch,
-      label: `Obter Campo: ${valor}`,
-      colorClass: 'text-cyan-700 dark:text-cyan-400',
-      bgClass: 'bg-cyan-100 dark:bg-cyan-900/40 border-cyan-300 dark:border-cyan-700',
-    };
-  } else if (acaoLower.startsWith('@ir_etapa:')) {
-    const valor = acao.replace(/^@ir_etapa:/i, '');
-    config = {
-      icon: ArrowRightCircle,
-      label: `Ir para Etapa: ${valor}`,
-      colorClass: 'text-purple-700 dark:text-purple-400',
-      bgClass: 'bg-purple-100 dark:bg-purple-900/40 border-purple-300 dark:border-purple-700',
-    };
-  } else if (acaoLower === '@verificar_cliente') {
-    config = {
-      icon: UserCheck,
-      label: 'Verificar Cliente',
-      colorClass: 'text-emerald-700 dark:text-emerald-400',
-      bgClass: 'bg-emerald-100 dark:bg-emerald-900/40 border-emerald-300 dark:border-emerald-700',
-    };
-  } else {
-    config = {
-      icon: Tag,
-      label: acao,
-      colorClass: 'text-muted-foreground',
-      bgClass: 'bg-muted border-border',
-    };
-  }
-  
-  acaoConfigCache.set(acao, config);
-  return config;
-}
-
-// Componente ActionChip para preview
-const ActionChip = memo(forwardRef<HTMLSpanElement, { 
-  action: string; 
-  onRemove?: () => void;
-}>(function ActionChip({ action, onRemove }, ref) {
-  const config = parseAcao(action);
-  const Icon = config.icon;
-  
-  return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span 
-            ref={ref}
-            className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-xs font-medium whitespace-nowrap cursor-default ${config.bgClass} ${config.colorClass}`}
-            style={{ verticalAlign: 'middle' }}
-          >
-            <Icon className="h-3 w-3 flex-shrink-0" />
-            <span>{config.label}</span>
-            {onRemove && (
-              <button 
-                type="button" 
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onRemove();
-                }}
-                className="flex-shrink-0 hover:opacity-70 text-current"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </span>
-        </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          <p className="font-mono">{action}</p>
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}));
-
-ActionChip.displayName = 'ActionChip';
 
 // Toolbar Button Component
 interface ToolbarButtonProps {
@@ -404,74 +160,8 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
   );
 }
 
-// Action Regex
-const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter|ir_etapa|verificar_cliente)(:[^\s@<>.,;!?]+)?/gi;
-
-// Preview Component - renders actions as chips with remove support
-interface ContentPreviewProps {
-  content: string;
-  placeholder?: string;
-  onRemoveAction?: (startIndex: number, endIndex: number) => void;
-}
-
-function ContentPreview({ content, placeholder, onRemoveAction }: ContentPreviewProps) {
-  const renderedContent = useMemo(() => {
-    if (!content) return null;
-    
-    const parts: React.ReactNode[] = [];
-    let lastIndex = 0;
-    
-    const matches = Array.from(content.matchAll(new RegExp(ACTION_REGEX.source, 'gi')));
-    
-    for (const match of matches) {
-      const matchIndex = match.index!;
-      const matchEnd = matchIndex + match[0].length;
-      
-      if (matchIndex > lastIndex) {
-        const textBefore = content.slice(lastIndex, matchIndex);
-        parts.push(
-          <span key={`text-${lastIndex}`} className="text-foreground whitespace-pre-wrap">
-            {textBefore}
-          </span>
-        );
-      }
-      
-      parts.push(
-        <ActionChip 
-          key={`action-${matchIndex}`}
-          action={match[0]}
-          onRemove={onRemoveAction ? () => onRemoveAction(matchIndex, matchEnd) : undefined}
-        />
-      );
-      
-      lastIndex = matchEnd;
-    }
-    
-    if (lastIndex < content.length) {
-      parts.push(
-        <span key={`text-${lastIndex}`} className="text-foreground whitespace-pre-wrap">
-          {content.slice(lastIndex)}
-        </span>
-      );
-    }
-    
-    return parts.length > 0 ? parts : null;
-  }, [content, onRemoveAction]);
-
-  return (
-    <div className="min-h-[160px] p-4 text-sm leading-7">
-      {renderedContent || (
-        <span className="text-muted-foreground">{placeholder}</span>
-      )}
-    </div>
-  );
-}
-
 // Main RichTextEditor Component
 export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: RichTextEditorProps) {
-  const [isFocused, setIsFocused] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -483,6 +173,7 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
         placeholder: placeholder || 'Digite aqui...',
         emptyEditorClass: 'is-editor-empty',
       }),
+      ActionNode,
     ],
     content: value,
     editorProps: {
@@ -500,73 +191,29 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
       },
     },
     onUpdate: ({ editor }) => {
-      onChange(editor.getText());
+      // Get content as text but preserve action nodes
+      const json = editor.getJSON();
+      const text = extractTextWithActions(json);
+      onChange(text);
     },
-    onFocus: () => setIsFocused(true),
-    onBlur: () => setIsFocused(false),
   });
 
   // Sync external value changes
   useEffect(() => {
-    if (editor && value !== editor.getText()) {
-      editor.commands.setContent(value);
+    if (editor) {
+      const currentText = extractTextWithActions(editor.getJSON());
+      if (value !== currentText) {
+        // Parse value to find actions and convert to proper nodes
+        const content = parseValueToContent(value);
+        editor.commands.setContent(content);
+      }
     }
   }, [value, editor]);
 
-  // Handler para remover ação
-  const handleRemoveAction = useCallback((startIndex: number, endIndex: number) => {
-    const before = value.slice(0, startIndex);
-    const after = value.slice(endIndex);
-    // Clean up extra spaces
-    const cleanBefore = before.endsWith(' ') ? before.slice(0, -1) : before;
-    const cleanAfter = after.startsWith(' ') ? after.slice(1) : after;
-    const newValue = (cleanBefore + ' ' + cleanAfter).trim();
-    onChange(newValue);
-  }, [value, onChange]);
-
-  // Handler para ativar modo edição
-  const handleActivateEdit = useCallback(() => {
-    setIsFocused(true);
-    // Delay to ensure state updates before focus
-    setTimeout(() => {
-      editor?.commands.focus('end');
-    }, 10);
-  }, [editor]);
-
   return (
-    <div 
-      ref={containerRef}
-      className={cn(
-        "border border-border rounded-xl overflow-hidden bg-input transition-all",
-        isFocused && "ring-2 ring-primary border-primary"
-      )}
-    >
+    <div className="border border-border rounded-xl overflow-hidden bg-input">
       <EditorToolbar editor={editor} />
-      
-      <div className="relative">
-        {/* Modo Visualização - chips visuais */}
-        <div
-          onClick={handleActivateEdit}
-          className={cn(
-            "cursor-text transition-all duration-200",
-            isFocused ? "opacity-0 pointer-events-none absolute inset-0 z-0" : "opacity-100 z-10"
-          )}
-        >
-          <ContentPreview 
-            content={value} 
-            placeholder={placeholder}
-            onRemoveAction={handleRemoveAction}
-          />
-        </div>
-
-        {/* Modo Edição - Tiptap */}
-        <div className={cn(
-          "transition-all duration-200",
-          !isFocused ? "opacity-0 pointer-events-none absolute inset-0 z-0" : "opacity-100 z-10"
-        )}>
-          <EditorContent editor={editor} />
-        </div>
-      </div>
+      <EditorContent editor={editor} />
       
       {/* Styles for placeholder and prose */}
       <style>{`
@@ -641,6 +288,93 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
       `}</style>
     </div>
   );
+}
+
+// Action Regex
+const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter|ir_etapa|followup|verificar_cliente)(:[^\s@<>.,;!?]+)?/gi;
+
+// Extract text with actions from editor JSON
+function extractTextWithActions(json: any): string {
+  if (!json || !json.content) return '';
+  
+  const extractFromNode = (node: any): string => {
+    if (node.type === 'text') {
+      return node.text || '';
+    }
+    if (node.type === 'action') {
+      return node.attrs?.action || '';
+    }
+    if (node.type === 'hardBreak') {
+      return '\n';
+    }
+    if (node.content && Array.isArray(node.content)) {
+      const text = node.content.map(extractFromNode).join('');
+      // Add newlines for block elements
+      if (['paragraph', 'heading', 'listItem'].includes(node.type)) {
+        return text + '\n';
+      }
+      return text;
+    }
+    return '';
+  };
+  
+  return json.content.map(extractFromNode).join('').trim();
+}
+
+// Parse value string to editor content with action nodes
+function parseValueToContent(value: string): any {
+  if (!value) {
+    return { type: 'doc', content: [{ type: 'paragraph' }] };
+  }
+  
+  const lines = value.split('\n');
+  const content: any[] = [];
+  
+  for (const line of lines) {
+    const paragraphContent: any[] = [];
+    let lastIndex = 0;
+    
+    const matches = Array.from(line.matchAll(new RegExp(ACTION_REGEX.source, 'gi')));
+    
+    for (const match of matches) {
+      const matchIndex = match.index!;
+      const matchEnd = matchIndex + match[0].length;
+      
+      // Add text before match
+      if (matchIndex > lastIndex) {
+        const textBefore = line.slice(lastIndex, matchIndex);
+        if (textBefore) {
+          paragraphContent.push({ type: 'text', text: textBefore });
+        }
+      }
+      
+      // Add action node
+      paragraphContent.push({
+        type: 'action',
+        attrs: { action: match[0] }
+      });
+      
+      lastIndex = matchEnd;
+    }
+    
+    // Add remaining text
+    if (lastIndex < line.length) {
+      const remaining = line.slice(lastIndex);
+      if (remaining) {
+        paragraphContent.push({ type: 'text', text: remaining });
+      }
+    }
+    
+    content.push({
+      type: 'paragraph',
+      content: paragraphContent.length > 0 ? paragraphContent : undefined
+    });
+  }
+  
+  return {
+    type: 'doc',
+    content: content.length > 0 ? content : [{ type: 'paragraph' }]
+  };
 }
 
 // Helper function to insert action
