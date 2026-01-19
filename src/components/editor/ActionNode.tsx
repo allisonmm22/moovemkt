@@ -44,7 +44,10 @@ export const ActionNode = Node.create({
   },
 
   addNodeView() {
-    return ReactNodeViewRenderer(ActionChipNode);
+    return ReactNodeViewRenderer(ActionChipNode, {
+      as: 'span',
+      className: 'inline-action-wrapper',
+    });
   },
 
   addCommands() {
