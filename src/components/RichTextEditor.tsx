@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useMemo, memo, forwardRef } from 'react';
+import { useEffect, useCallback, useMemo, memo, forwardRef, useState, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -407,14 +407,14 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
 // Action Regex
 const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter|ir_etapa|verificar_cliente)(:[^\s@<>.,;!?]+)?/gi;
 
-// Preview Component - renders actions as chips
+// Preview Component - renders actions as chips with remove support
 interface ContentPreviewProps {
   content: string;
-  onClick: () => void;
   placeholder?: string;
+  onRemoveAction?: (startIndex: number, endIndex: number) => void;
 }
 
-function ContentPreview({ content, onClick, placeholder }: ContentPreviewProps) {
+function ContentPreview({ content, placeholder, onRemoveAction }: ContentPreviewProps) {
   const renderedContent = useMemo(() => {
     if (!content) return null;
     
@@ -425,6 +425,7 @@ function ContentPreview({ content, onClick, placeholder }: ContentPreviewProps) 
     
     for (const match of matches) {
       const matchIndex = match.index!;
+      const matchEnd = matchIndex + match[0].length;
       
       if (matchIndex > lastIndex) {
         const textBefore = content.slice(lastIndex, matchIndex);
@@ -438,11 +439,12 @@ function ContentPreview({ content, onClick, placeholder }: ContentPreviewProps) 
       parts.push(
         <ActionChip 
           key={`action-${matchIndex}`}
-          action={match[0]} 
+          action={match[0]}
+          onRemove={onRemoveAction ? () => onRemoveAction(matchIndex, matchEnd) : undefined}
         />
       );
       
-      lastIndex = matchIndex + match[0].length;
+      lastIndex = matchEnd;
     }
     
     if (lastIndex < content.length) {
@@ -454,13 +456,10 @@ function ContentPreview({ content, onClick, placeholder }: ContentPreviewProps) 
     }
     
     return parts.length > 0 ? parts : null;
-  }, [content]);
+  }, [content, onRemoveAction]);
 
   return (
-    <div
-      onClick={onClick}
-      className="min-h-[160px] p-4 cursor-text text-sm leading-7"
-    >
+    <div className="min-h-[160px] p-4 text-sm leading-7">
       {renderedContent || (
         <span className="text-muted-foreground">{placeholder}</span>
       )}
@@ -470,6 +469,9 @@ function ContentPreview({ content, onClick, placeholder }: ContentPreviewProps) 
 
 // Main RichTextEditor Component
 export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: RichTextEditorProps) {
+  const [isFocused, setIsFocused] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -500,6 +502,8 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
     onUpdate: ({ editor }) => {
       onChange(editor.getText());
     },
+    onFocus: () => setIsFocused(true),
+    onBlur: () => setIsFocused(false),
   });
 
   // Sync external value changes
@@ -509,10 +513,60 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
     }
   }, [value, editor]);
 
+  // Handler para remover ação
+  const handleRemoveAction = useCallback((startIndex: number, endIndex: number) => {
+    const before = value.slice(0, startIndex);
+    const after = value.slice(endIndex);
+    // Clean up extra spaces
+    const cleanBefore = before.endsWith(' ') ? before.slice(0, -1) : before;
+    const cleanAfter = after.startsWith(' ') ? after.slice(1) : after;
+    const newValue = (cleanBefore + ' ' + cleanAfter).trim();
+    onChange(newValue);
+  }, [value, onChange]);
+
+  // Handler para ativar modo edição
+  const handleActivateEdit = useCallback(() => {
+    setIsFocused(true);
+    // Delay to ensure state updates before focus
+    setTimeout(() => {
+      editor?.commands.focus('end');
+    }, 10);
+  }, [editor]);
+
   return (
-    <div className="border border-border rounded-xl overflow-hidden bg-input focus-within:ring-2 focus-within:ring-primary focus-within:border-primary transition-all">
+    <div 
+      ref={containerRef}
+      className={cn(
+        "border border-border rounded-xl overflow-hidden bg-input transition-all",
+        isFocused && "ring-2 ring-primary border-primary"
+      )}
+    >
       <EditorToolbar editor={editor} />
-      <EditorContent editor={editor} />
+      
+      <div className="relative">
+        {/* Modo Visualização - chips visuais */}
+        <div
+          onClick={handleActivateEdit}
+          className={cn(
+            "cursor-text transition-all duration-200",
+            isFocused ? "opacity-0 pointer-events-none absolute inset-0 z-0" : "opacity-100 z-10"
+          )}
+        >
+          <ContentPreview 
+            content={value} 
+            placeholder={placeholder}
+            onRemoveAction={handleRemoveAction}
+          />
+        </div>
+
+        {/* Modo Edição - Tiptap */}
+        <div className={cn(
+          "transition-all duration-200",
+          !isFocused ? "opacity-0 pointer-events-none absolute inset-0 z-0" : "opacity-100 z-10"
+        )}>
+          <EditorContent editor={editor} />
+        </div>
+      </div>
       
       {/* Styles for placeholder and prose */}
       <style>{`
