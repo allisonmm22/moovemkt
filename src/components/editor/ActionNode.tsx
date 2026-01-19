@@ -39,8 +39,9 @@ export const ActionNode = Node.create({
     ];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    return ['span', mergeAttributes({ 'data-action': HTMLAttributes.action }, HTMLAttributes), HTMLAttributes.action];
+  renderHTML({ node, HTMLAttributes }) {
+    const action = node.attrs.action || '';
+    return ['span', mergeAttributes({ 'data-action': action }, HTMLAttributes), action];
   },
 
   addNodeView() {
