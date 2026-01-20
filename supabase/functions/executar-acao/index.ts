@@ -600,11 +600,28 @@ serve(async (req) => {
       }
 
       case 'nome': {
-        // Alterar nome do contato
+        // Alterar nome do contato (com idempotência)
         const novoNome = acaoObj.valor?.trim();
         
         if (!novoNome) {
           resultado = { sucesso: false, mensagem: 'Nome não fornecido' };
+          break;
+        }
+
+        // Verificar se o nome atual já é igual (idempotência)
+        const { data: contatoAtual } = await supabase
+          .from('contatos')
+          .select('nome')
+          .eq('id', contato_id)
+          .maybeSingle();
+        
+        if (contatoAtual?.nome?.toLowerCase().trim() === novoNome.toLowerCase()) {
+          console.log(`📌 [IDEMPOTÊNCIA] Nome já é "${novoNome}", pulando atualização`);
+          resultado = { 
+            sucesso: true, 
+            mensagem: `Nome já está definido como "${novoNome}"`,
+            dados: { mensagem_sistema_ja_registrada: true }
+          };
           break;
         }
 
@@ -1076,6 +1093,17 @@ serve(async (req) => {
             .maybeSingle();
 
           console.log('📝 [CAMPO] Registro existente:', existente ? `ID: ${existente.id}, valor atual: "${existente.valor}"` : 'nenhum');
+
+          // IDEMPOTÊNCIA: Se o valor já é igual, não atualizar novamente
+          if (existente && existente.valor?.trim().toLowerCase() === valorCampo.trim().toLowerCase()) {
+            console.log(`📌 [IDEMPOTÊNCIA] Campo "${campoEncontrado.nome}" já tem valor "${valorCampo}", pulando atualização`);
+            resultado = { 
+              sucesso: true, 
+              mensagem: `Campo "${campoEncontrado.nome}" já está definido como "${valorCampo}"`,
+              dados: { mensagem_sistema_ja_registrada: true }
+            };
+            break;
+          }
 
           let campoError;
           if (existente) {
