@@ -1,5 +1,5 @@
-import { useEffect, useCallback, useMemo, memo, forwardRef } from 'react';
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEffect, forwardRef, useImperativeHandle } from 'react';
+import { useEditor, EditorContent, Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { 
@@ -9,6 +9,12 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { ActionNode } from '@/components/editor/ActionNode';
+
+export interface RichTextEditorRef {
+  insertAction: (action: string) => void;
+  focus: () => void;
+  getEditor: () => Editor | null;
+}
 
 interface RichTextEditorProps {
   value: string;
@@ -161,8 +167,9 @@ function EditorToolbar({ editor }: EditorToolbarProps) {
 }
 
 // Main RichTextEditor Component
-export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: RichTextEditorProps) {
-  const editor = useEditor({
+export const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
+  ({ value, onChange, placeholder, onAcaoClick }, ref) => {
+    const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: {
@@ -197,28 +204,41 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
     },
   });
 
-  // Sync external value changes
-  useEffect(() => {
-    if (editor && value) {
-      try {
-        // Try to parse as JSON first (new format)
-        const parsedContent = JSON.parse(value);
-        const currentJson = JSON.stringify(editor.getJSON());
-        if (value !== currentJson) {
-          editor.commands.setContent(parsedContent);
+    // Expose editor methods via ref
+    useImperativeHandle(ref, () => ({
+      insertAction: (action: string) => {
+        if (editor) {
+          editor.chain().focus().insertAction(action).run();
         }
-      } catch {
-        // If not valid JSON, it's legacy plain text - convert it
-        const content = parseValueToContent(value);
-        const currentText = extractTextWithActions(editor.getJSON());
-        if (value !== currentText) {
-          editor.commands.setContent(content);
+      },
+      focus: () => {
+        editor?.commands.focus();
+      },
+      getEditor: () => editor,
+    }), [editor]);
+
+    // Sync external value changes
+    useEffect(() => {
+      if (editor && value) {
+        try {
+          // Try to parse as JSON first (new format)
+          const parsedContent = JSON.parse(value);
+          const currentJson = JSON.stringify(editor.getJSON());
+          if (value !== currentJson) {
+            editor.commands.setContent(parsedContent);
+          }
+        } catch {
+          // If not valid JSON, it's legacy plain text - convert it
+          const content = parseValueToContent(value);
+          const currentText = extractTextWithActions(editor.getJSON());
+          if (value !== currentText) {
+            editor.commands.setContent(content);
+          }
         }
       }
-    }
-  }, [value, editor]);
+    }, [value, editor]);
 
-  return (
+    return (
     <div className="border border-border rounded-xl overflow-hidden bg-input">
       <EditorToolbar editor={editor} />
       <EditorContent editor={editor} />
@@ -304,10 +324,13 @@ export function RichTextEditor({ value, onChange, placeholder, onAcaoClick }: Ri
           display: inline-flex !important;
           align-items: center;
         }
-      `}</style>
-    </div>
-  );
-}
+        `}</style>
+      </div>
+    );
+  }
+);
+
+RichTextEditor.displayName = 'RichTextEditor';
 
 // Action Regex
 const ACTION_REGEX = /@(nome|tag|etapa|transferir|fonte|notificar|produto|finalizar|negociacao|agenda|campo|obter|ir_etapa|followup|verificar_cliente)(:[^\s@<>.,;!?]+)?/gi;
