@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { 
-  Plus, DollarSign, User, MoreVertical, GripVertical, Loader2, Settings, 
-  Calendar, Percent, Bell, BellOff, Edit2, TrendingUp, Briefcase, Target,
-  ArrowRight, Search, X, ChevronLeft, ChevronRight as ChevronRightIcon
+  Plus, DollarSign, MoreVertical, Loader2, Settings, 
+  Bell, BellOff, Edit2, TrendingUp, Briefcase, Target,
+  Search, X, ChevronLeft, ChevronRight as ChevronRightIcon
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -348,21 +348,9 @@ export default function CRM() {
     return getNegociacoesPorEstagio(estagioId).reduce((acc, n) => acc + Number(n.valor), 0);
   };
 
-  const getInitials = (name: string) => {
-    return name
-      .split(' ')
-      .map(n => n[0])
-      .slice(0, 2)
-      .join('')
-      .toUpperCase();
-  };
+  // getInitials removido - não mais usado no design simplificado
 
-  const getProbabilityColor = (prob: number | undefined) => {
-    if (!prob) return { bg: 'bg-muted', border: 'border-muted-foreground/20', text: 'text-muted-foreground' };
-    if (prob >= 70) return { bg: 'bg-emerald-500/20', border: 'border-emerald-500', text: 'text-emerald-500' };
-    if (prob >= 40) return { bg: 'bg-amber-500/20', border: 'border-amber-500', text: 'text-amber-500' };
-    return { bg: 'bg-muted', border: 'border-muted-foreground/30', text: 'text-muted-foreground' };
-  };
+  // getProbabilityColor removido - não mais usado no design simplificado
 
   const handleToggleFollowup = async (estagio: Estagio) => {
     const novoValor = !(estagio.followup_ativo ?? true);
@@ -429,52 +417,52 @@ export default function CRM() {
             </div>
           </div>
 
-          {/* Cards de Métricas - Horizontal scroll em mobile */}
+          {/* Cards de Métricas - Simplificados */}
           <div className={cn(
-            "flex gap-3 md:gap-4",
+            "flex gap-3",
             isMobile ? "overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory" : "grid grid-cols-3"
           )}>
             <div className={cn(
-              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border border-emerald-500/20",
-              isMobile && "flex-shrink-0 w-[160px] snap-center"
+              "p-4 rounded-xl bg-card border border-border",
+              isMobile && "flex-shrink-0 w-[150px] snap-center"
             )}>
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="p-2 md:p-2.5 rounded-xl bg-emerald-500/20">
-                  <DollarSign className="h-4 w-4 md:h-5 md:w-5 text-emerald-500" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs md:text-sm text-muted-foreground">Pipeline</p>
-                  <p className="text-lg md:text-2xl font-bold text-foreground truncate">{formatCurrency(metricas.totalPipeline)}</p>
+                  <p className="text-xs text-muted-foreground">Pipeline</p>
+                  <p className="text-lg font-semibold text-foreground truncate">{formatCurrency(metricas.totalPipeline)}</p>
                 </div>
               </div>
             </div>
             
             <div className={cn(
-              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-500/20",
-              isMobile && "flex-shrink-0 w-[140px] snap-center"
+              "p-4 rounded-xl bg-card border border-border",
+              isMobile && "flex-shrink-0 w-[130px] snap-center"
             )}>
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="p-2 md:p-2.5 rounded-xl bg-blue-500/20">
-                  <Briefcase className="h-4 w-4 md:h-5 md:w-5 text-blue-500" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted">
+                  <Briefcase className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Negociações</p>
-                  <p className="text-lg md:text-2xl font-bold text-foreground">{metricas.totalNegociacoes}</p>
+                  <p className="text-xs text-muted-foreground">Negociações</p>
+                  <p className="text-lg font-semibold text-foreground">{metricas.totalNegociacoes}</p>
                 </div>
               </div>
             </div>
             
             <div className={cn(
-              "p-3 md:p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-violet-500/5 border border-violet-500/20",
-              isMobile && "flex-shrink-0 w-[140px] snap-center"
+              "p-4 rounded-xl bg-card border border-border",
+              isMobile && "flex-shrink-0 w-[130px] snap-center"
             )}>
-              <div className="flex items-center gap-2 md:gap-3">
-                <div className="p-2 md:p-2.5 rounded-xl bg-violet-500/20">
-                  <TrendingUp className="h-4 w-4 md:h-5 md:w-5 text-violet-500" />
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-muted">
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
                 </div>
                 <div>
-                  <p className="text-xs md:text-sm text-muted-foreground">Prob. Média</p>
-                  <p className="text-lg md:text-2xl font-bold text-foreground">{metricas.mediaProbabilidade}%</p>
+                  <p className="text-xs text-muted-foreground">Prob. Média</p>
+                  <p className="text-lg font-semibold text-foreground">{metricas.mediaProbabilidade}%</p>
                 </div>
               </div>
             </div>
@@ -685,34 +673,7 @@ export default function CRM() {
           </div>
         )}
 
-        {/* Pipeline Progress Bar (Desktop only) */}
-        {!isMobile && selectedFunil && selectedFunil.estagios.length > 0 && (
-          <div className="flex items-center gap-1 px-1">
-            {selectedFunil.estagios.map((estagio, index) => {
-              const count = getNegociacoesPorEstagio(estagio.id).length;
-              const total = metricas.totalNegociacoes || 1;
-              const width = Math.max(count / total * 100, 5);
-              
-              return (
-                <div key={estagio.id} className="flex items-center flex-1">
-                  <div 
-                    className="h-2 rounded-full transition-all duration-500"
-                    style={{ 
-                      backgroundColor: estagio.cor,
-                      width: `${width}%`,
-                      minWidth: '20px',
-                      opacity: count > 0 ? 1 : 0.3
-                    }}
-                    title={`${estagio.nome}: ${count} negociações`}
-                  />
-                  {index < selectedFunil.estagios.length - 1 && (
-                    <ArrowRight className="h-3 w-3 text-muted-foreground/30 mx-1 flex-shrink-0" />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {/* Pipeline Progress Bar removida para visual mais limpo */}
 
         {/* Kanban */}
         {selectedFunil ? (
@@ -753,48 +714,33 @@ export default function CRM() {
                   onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, estagio.id)}
                 >
-                  {/* Header do Estágio - Esconder em mobile pois já temos o navegador */}
+                  {/* Header do Estágio - Simplificado */}
                   {!isMobile && (
                     <div 
                       className={cn(
-                        "mb-4 p-4 rounded-2xl border transition-all duration-300",
-                        isDropTarget 
-                          ? "border-primary shadow-lg shadow-primary/20" 
-                          : "border-border"
+                        "mb-3 pb-3 border-b transition-all duration-300",
+                        isDropTarget ? "border-primary" : "border-border"
                       )}
-                      style={{
-                        background: `linear-gradient(135deg, ${estagio.cor}15, ${estagio.cor}05)`,
-                        borderLeft: `4px solid ${estagio.cor}`
-                      }}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <div
-                            className="h-3 w-3 rounded-full ring-2 ring-offset-2 ring-offset-card"
-                            style={{ 
-                              backgroundColor: estagio.cor,
-                              boxShadow: `0 0 12px ${estagio.cor}60`
-                            }}
+                            className="h-2 w-2 rounded-full"
+                            style={{ backgroundColor: estagio.cor }}
                           />
-                          <h3 className="font-semibold text-foreground">{estagio.nome}</h3>
-                          <span className="text-xs font-medium text-foreground bg-background/80 px-2.5 py-1 rounded-full border border-border">
+                          <h3 className="font-medium text-sm text-foreground">{estagio.nome}</h3>
+                          <span className="text-xs text-muted-foreground">
                             {negociacoesEstagio.length}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {estagio.followup_ativo === false ? (
-                            <span title="Follow-up desativado" className="text-muted-foreground/40">
-                              <BellOff className="h-4 w-4" />
-                            </span>
-                          ) : (
-                            <span title="Follow-up ativo" className="text-primary/60">
-                              <Bell className="h-4 w-4" />
-                            </span>
-                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {formatCurrency(getTotalPorEstagio(estagio.id))}
+                          </span>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <button className="p-1.5 rounded-lg hover:bg-background/80 transition-colors">
-                                <MoreVertical className="h-4 w-4 text-muted-foreground" />
+                              <button className="p-1 rounded-md hover:bg-muted transition-colors">
+                                <MoreVertical className="h-3.5 w-3.5 text-muted-foreground" />
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
@@ -818,13 +764,6 @@ export default function CRM() {
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>
-                      </div>
-                      {/* Total */}
-                      <div className="mt-3 pt-3 border-t border-border/50 flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium text-foreground">
-                          {formatCurrency(getTotalPorEstagio(estagio.id))}
-                        </span>
                       </div>
                     </div>
                   )}
@@ -870,9 +809,7 @@ export default function CRM() {
                     "space-y-3 min-h-[200px]",
                     !isMobile && "max-h-[calc(100vh-380px)] overflow-y-auto crm-stage-scroll pr-1"
                   )}>
-                    {negociacoesEstagio.map((negociacao, cardIndex) => {
-                      const probColors = getProbabilityColor(negociacao.probabilidade);
-                      
+                    {negociacoesEstagio.map((negociacao) => {
                       return (
                         <div
                           key={negociacao.id}
@@ -881,74 +818,29 @@ export default function CRM() {
                           onDragEnd={handleDragEnd}
                           onClick={() => handleAbrirDetalhes(negociacao)}
                           className={cn(
-                            'group relative rounded-2xl bg-card border cursor-pointer transition-all duration-300',
-                            'hover:shadow-xl hover:shadow-black/10 hover:-translate-y-1',
-                            dragging === negociacao.id 
-                              ? 'opacity-50 cursor-grabbing rotate-2 scale-105' 
-                              : 'hover:border-primary/30'
+                            'group relative p-3 rounded-lg bg-card border border-border cursor-pointer transition-all',
+                            'hover:border-primary/30 hover:shadow-sm',
+                            dragging === negociacao.id && 'opacity-50 cursor-grabbing'
                           )}
-                          style={{
-                            animationDelay: `${cardIndex * 30}ms`,
-                            borderTop: `3px solid ${probColors.border === 'border-emerald-500' ? '#10b981' : probColors.border === 'border-amber-500' ? '#f59e0b' : 'hsl(var(--muted-foreground) / 0.3)'}`
-                          }}
                         >
-                          <div className="p-4">
-                            {/* Header com Grip e Probabilidade */}
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                                <h4 className="font-semibold text-foreground truncate">{negociacao.titulo}</h4>
-                              </div>
-                              <div className={cn(
-                                'flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0',
-                                probColors.bg, probColors.text
-                              )}>
-                                <Percent className="h-3 w-3" />
-                                {negociacao.probabilidade || 0}
-                              </div>
-                            </div>
-
-                            {/* Avatar e Nome do Contato */}
-                            <div className="flex items-center gap-3 mb-4">
-                              <div 
-                                className="flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold flex-shrink-0"
-                                style={{
-                                  backgroundColor: `${estagio.cor}25`,
-                                  color: estagio.cor
-                                }}
-                              >
-                                {negociacao.contatos?.nome ? getInitials(negociacao.contatos.nome) : <User className="h-4 w-4" />}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">
-                                  {negociacao.contatos?.nome || 'Sem contato'}
-                                </p>
-                                <p className="text-xs text-muted-foreground">Contato</p>
-                              </div>
-                            </div>
-
-                            {/* Valor e Data */}
-                            <div className="flex items-center justify-between pt-3 border-t border-border/50">
-                              <div className="flex items-center gap-2">
-                                <div className="p-1.5 rounded-lg bg-emerald-500/10">
-                                  <DollarSign className="h-4 w-4 text-emerald-500" />
-                                </div>
-                                <span className="font-bold text-foreground">
-                                  {formatCurrency(Number(negociacao.valor))}
-                                </span>
-                              </div>
-                              {negociacao.created_at && (
-                                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  <Calendar className="h-3.5 w-3.5" />
-                                  <span>
-                                    {formatDistanceToNow(new Date(negociacao.created_at), { 
-                                      addSuffix: true, 
-                                      locale: ptBR 
-                                    })}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
+                          {/* Título */}
+                          <p className="font-medium text-sm text-foreground truncate mb-1">
+                            {negociacao.titulo}
+                          </p>
+                          
+                          {/* Contato */}
+                          <p className="text-xs text-muted-foreground truncate mb-3">
+                            {negociacao.contatos?.nome || 'Sem contato'}
+                          </p>
+                          
+                          {/* Footer: Valor e Prob */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-foreground">
+                              {formatCurrency(Number(negociacao.valor))}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {negociacao.probabilidade || 0}%
+                            </span>
                           </div>
                         </div>
                       );
