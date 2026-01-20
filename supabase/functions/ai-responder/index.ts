@@ -1742,6 +1742,23 @@ serve(async (req) => {
       promptCompleto += '- Se houver múltiplas ações na etapa (ex: @nome, @etapa:proposta, @transferir:agente:xxx), execute TODAS elas\n';
     }
 
+    // ========= REGRA CRÍTICA: TEXTO LITERAL OBRIGATÓRIO =========
+    promptCompleto += '\n## ⚠️ REGRA CRÍTICA: TEXTO LITERAL OBRIGATÓRIO\n';
+    promptCompleto += 'Quando o prompt ou instrução contiver texto entre aspas duplas (ex: "Prazer, [NOME]!"), você DEVE:\n';
+    promptCompleto += '1. Usar o texto EXATAMENTE como escrito - é um SCRIPT OBRIGATÓRIO\n';
+    promptCompleto += '2. Substituir APENAS os placeholders como [NOME], [EMAIL], etc. pelos valores reais\n';
+    promptCompleto += '3. NUNCA parafrasear, resumir, alterar ou ignorar o texto entre aspas\n';
+    promptCompleto += '4. NUNCA substituir por mensagens genéricas como "Entendido!", "Processando...", "Olá!", "Certo!"\n\n';
+    promptCompleto += '**EXEMPLOS:**\n';
+    promptCompleto += '- Instrução: "Prazer, [NOME]! Vou te fazer algumas perguntas rápidas sobre seu plano de saúde..."\n';
+    promptCompleto += '- Lead disse: "Allison"\n';
+    promptCompleto += '- ✅ CORRETO: "Prazer, Allison! Vou te fazer algumas perguntas rápidas sobre seu plano de saúde..."\n';
+    promptCompleto += '- ❌ ERRADO: "Entendido! Estou processando..." (mensagem genérica proibida)\n';
+    promptCompleto += '- ❌ ERRADO: "Certo, Allison! Vamos lá..." (paráfrase proibida)\n';
+    promptCompleto += '- ❌ ERRADO: "Olá Allison!" (resumo proibido)\n\n';
+    promptCompleto += 'O texto entre aspas é a MENSAGEM EXATA que você deve enviar ao cliente. Qualquer desvio é PROIBIDO!\n';
+    promptCompleto += 'Se o lead responder com "pode seguir", "continua", "sim", "ok" ou algo similar - siga para a próxima pergunta/ação do fluxo usando o texto literal configurado.\n';
+
     // Detectar placeholders dinâmicos no prompt e adicionar instruções especiais
   // Combinar prompt_sistema + descrição da etapa como UM ÚNICO DOCUMENTO para detecção
   const promptAgente = agente?.prompt_sistema || '';
@@ -2082,7 +2099,8 @@ serve(async (req) => {
     respostaFinal = respostaFinal.replace(/vou transferir.*?\./gi, '').trim();
     respostaFinal = respostaFinal.replace(/estou (te )?transferindo.*?\./gi, '').trim();
     respostaFinal = respostaFinal.replace(/já estou transferindo.*?\./gi, '').trim();
-    respostaFinal = respostaFinal.replace(/processando sua (solicitação|transferência).*?\./gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^(Entendido!?\s*)?Estou processando sua (solicitação|transferência)[^.]*\.?\s*$/gi, '').trim();
+    respostaFinal = respostaFinal.replace(/^(Certo!?\s*)?(Entendido!?\s*)?Processando.*$/gi, '').trim();
     respostaFinal = respostaFinal.replace(/sua solicitação.*?transferida.*?\./gi, '').trim();
     respostaFinal = respostaFinal.replace(/transferindo (você|sua conversa|seu atendimento).*?\./gi, '').trim();
     
