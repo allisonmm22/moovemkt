@@ -2018,6 +2018,60 @@ serve(async (req) => {
     if (result.acoes && result.acoes.length > 0 && contatoId) {
       console.log('Executando', result.acoes.length, 'ações...');
       
+      // 🆕 FILTRO DE AÇÕES CONFIGURADAS: Só executar ações que estão no prompt
+      // Detectar quais ações estão explicitamente configuradas no prompt/etapa
+      const promptAgenteFiltro = agente?.prompt_sistema || '';
+      let descricaoEtapaFiltro = '';
+      if (etapaAtualGlobal?.descricao) {
+        descricaoEtapaFiltro = extractTextFromTiptapJson(etapaAtualGlobal.descricao);
+      }
+      const documentoFiltro = (promptAgenteFiltro + '\n' + descricaoEtapaFiltro).toLowerCase();
+      
+      // Mapear quais ações estão permitidas pelo prompt
+      const acoesPermitidas = new Set<string>(['nome', 'campo']); // Sempre permitir captura básica
+      
+      if (documentoFiltro.includes('@negociacao') || documentoFiltro.includes('@negociaçao')) {
+        acoesPermitidas.add('negociacao');
+      }
+      if (documentoFiltro.includes('@etapa') || documentoFiltro.includes('@ir_etapa')) {
+        acoesPermitidas.add('etapa');
+        acoesPermitidas.add('ir_etapa');
+      }
+      if (documentoFiltro.includes('@followup')) {
+        acoesPermitidas.add('followup');
+      }
+      if (documentoFiltro.includes('@transferir')) {
+        acoesPermitidas.add('transferir');
+      }
+      if (documentoFiltro.includes('@finalizar')) {
+        acoesPermitidas.add('finalizar');
+      }
+      if (documentoFiltro.includes('@tag')) {
+        acoesPermitidas.add('tag');
+      }
+      if (documentoFiltro.includes('@agenda')) {
+        acoesPermitidas.add('agenda');
+      }
+      
+      console.log('📋 [FILTRO] Ações permitidas pelo prompt:', Array.from(acoesPermitidas));
+      
+      // Filtrar ações que o modelo inventou (não estão no prompt)
+      const acoesOriginais = [...result.acoes];
+      const acoesFiltradas = result.acoes.filter(a => {
+        // Ações de agenda/verificar são sempre permitidas (executadas no tool-calling)
+        if (['agenda', 'verificar_cliente'].includes(a.tipo)) return true;
+        // Verificar se a ação está permitida
+        return acoesPermitidas.has(a.tipo);
+      });
+      
+      const acoesDescartadas = acoesOriginais.filter(a => !acoesFiltradas.includes(a));
+      if (acoesDescartadas.length > 0) {
+        console.log('⚠️ [FILTRO] Ações descartadas (não estão no prompt):', acoesDescartadas.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
+      }
+      
+      // Usar ações filtradas a partir daqui
+      result.acoes = acoesFiltradas;
+      
       // BLINDAGEM MELHORADA: Preservar ações de CAPTURA (campo, nome) enquanto limita ações estruturais
       // IMPORTANTE: Não contar ações já executadas no tool-calling (agenda, verificar_cliente)
       const acoesJaExecutadas = ['agenda', 'verificar_cliente'];
@@ -2041,8 +2095,8 @@ serve(async (req) => {
         console.log('⚠️ [BLINDAGEM] Agente tentou executar', acoesExecutaveis.length, 'ações executáveis de uma vez!');
         console.log('Ações detectadas:', result.acoes.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
         
-        // Prioridade para ações estruturais: ir_etapa > followup > agenda > transferir > finalizar > tag
-        const prioridade = ['ir_etapa', 'etapa', 'followup', 'agenda', 'transferir', 'finalizar', 'tag', 'negociacao'];
+        // Prioridade para ações estruturais: negociacao PRIMEIRO, depois ir_etapa > followup > etc
+        const prioridade = ['negociacao', 'ir_etapa', 'etapa', 'followup', 'agenda', 'transferir', 'finalizar', 'tag'];
         let acaoEstrutural = null;
         for (const tipo of prioridade) {
           const encontrada = acoesEstruturais.find(a => a.tipo === tipo);
@@ -2073,8 +2127,10 @@ serve(async (req) => {
             tipo: 'info_ia_acoes_filtradas',
             descricao: `Blindagem aplicada: ${acoesCaptura.length} captura, ${acoesEstruturais.length} estruturais -> ${acoesParaExecutar.length} executadas`,
             metadata: {
-              acoes_originais: result.acoes.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
+              acoes_originais: acoesOriginais.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
+              acoes_filtradas: acoesFiltradas.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
               acoes_executadas: acoesParaExecutar.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
+              acoes_descartadas: acoesDescartadas.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
               mensagem_cliente: mensagem?.substring(0, 200),
             },
           });
