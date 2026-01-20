@@ -863,63 +863,129 @@ async function callOpenAI(
   const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
                        modelo.includes('o3') || modelo.includes('o4');
   
-  const requestBody: any = {
-    model: modelo,
-    messages,
-  };
-
-  if (tools && tools.length > 0) {
-    requestBody.tools = tools;
-    
-    // Se detectamos confirmação de agendamento, forçar uso de ferramenta
-    if (forcarFerramentaAgenda) {
-      console.log('🔧 [TOOL CHOICE] Forçando uso de ferramenta para agendamento');
-      requestBody.tool_choice = 'required';
-    } else {
-      requestBody.tool_choice = 'auto';
-    }
-  }
-
-  // Modelos GPT-5, GPT-4.1, O3 e O4 NÃO suportam temperature customizada (usa default 1)
-  // Apenas aplicar temperature para modelos legados (gpt-4o, gpt-4o-mini)
-  if (!isModeloNovo) {
-    requestBody.temperature = temperatura;
-    console.log(`🤖 Chamando modelo legado: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
-  } else {
-    console.log(`🤖 Chamando modelo novo: ${modelo}, Temperatura: default (1), MaxTokens: ${maxTokens}`);
-  }
-
-  if (isModeloNovo) {
-    requestBody.max_completion_tokens = maxTokens;
-  } else {
-    requestBody.max_tokens = maxTokens;
-  }
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(requestBody),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`OpenAI error ${response.status}: ${errorText}`);
-  }
-
-  const data = await response.json();
-  
-  // Verificar se há tool calls
-  const message = data.choices?.[0]?.message;
-  const toolCalls = message?.tool_calls;
-  
-  let resposta = message?.content || '';
+  let currentMessages: any[] = [...messages];
   let acoes: Acao[] = [];
+  let resposta = '';
+  let tokens = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
   
-  if (toolCalls && toolCalls.length > 0) {
-    // Processar tool calls e obter resultados
+  const MAX_ITERATIONS = 4; // Máximo de rodadas de tool-calling
+  
+  for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+    console.log(`🔄 [LOOP ${iteration}/${MAX_ITERATIONS}] Chamando modelo...`);
+    
+    const requestBody: any = {
+      model: modelo,
+      messages: currentMessages,
+    };
+
+    // Na última iteração, forçar resposta textual (sem tools)
+    const isLastIteration = iteration === MAX_ITERATIONS;
+    const forceTextOnly = isLastIteration && acoes.length > 0;
+    
+    if (forceTextOnly) {
+      console.log('🔧 [FORÇA TEXTO] Última iteração - forçando resposta textual sem tools');
+      // Adicionar instrução para responder com texto
+      currentMessages = [
+        ...currentMessages,
+        {
+          role: 'user',
+          content: '[SISTEMA] Ações executadas com sucesso. Agora responda ao cliente com a PRÓXIMA MENSAGEM DO FLUXO conforme o script configurado. NÃO chame nenhuma ferramenta. Responda APENAS com o texto que deve ser enviado ao cliente.',
+        },
+      ];
+      // Não incluir tools para forçar texto
+    } else if (tools && tools.length > 0) {
+      requestBody.tools = tools;
+      
+      if (forcarFerramentaAgenda) {
+        console.log('🔧 [TOOL CHOICE] Forçando uso de ferramenta para agendamento');
+        requestBody.tool_choice = 'required';
+      } else {
+        requestBody.tool_choice = 'auto';
+      }
+    }
+
+    if (!isModeloNovo) {
+      requestBody.temperature = temperatura;
+      if (iteration === 1) {
+        console.log(`🤖 Chamando modelo legado: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
+      }
+    } else {
+      if (iteration === 1) {
+        console.log(`🤖 Chamando modelo novo: ${modelo}, Temperatura: default (1), MaxTokens: ${maxTokens}`);
+      }
+    }
+
+    if (isModeloNovo) {
+      requestBody.max_completion_tokens = maxTokens;
+    } else {
+      requestBody.max_tokens = maxTokens;
+    }
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenAI error ${response.status}: ${errorText}`);
+    }
+
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+    const toolCalls = message?.tool_calls;
+    const content = message?.content || '';
+    
+    // Acumular tokens
+    const usage = data.usage || {};
+    tokens.prompt_tokens += usage.prompt_tokens || 0;
+    tokens.completion_tokens += usage.completion_tokens || 0;
+    tokens.total_tokens += usage.total_tokens || 0;
+    
+    console.log(`🔄 [LOOP ${iteration}] Content length: ${content.length}, Tool calls: ${toolCalls?.length || 0}`);
+    
+    // Se tem conteúdo substancial (não é só confirmação genérica), usar
+    const contentUsavel = content && content.length > 15 && 
+      !content.match(/^(Entendido!?|Certo!?|Ok!?|Processando|Aguarde)[\s.!]*$/i);
+    
+    if (contentUsavel) {
+      resposta = content;
+      console.log(`✅ [LOOP ${iteration}] Resposta substancial obtida: ${resposta.substring(0, 80)}...`);
+      
+      // Se também tem tool calls, processar
+      if (toolCalls && toolCalls.length > 0) {
+        for (const toolCall of toolCalls) {
+          if (toolCall.function?.name === 'executar_acao') {
+            try {
+              const args = JSON.parse(toolCall.function.arguments);
+              acoes.push(args);
+              console.log(`🔧 [LOOP ${iteration}] Ação adicional: ${args.tipo}`);
+            } catch (e) {
+              console.error('Erro ao parsear ação:', e);
+            }
+          }
+        }
+      }
+      
+      // Temos resposta boa, sair do loop
+      break;
+    }
+    
+    // Se não tem tool calls e não tem conteúdo bom, problema
+    if (!toolCalls || toolCalls.length === 0) {
+      if (content) {
+        resposta = content;
+        console.log(`⚠️ [LOOP ${iteration}] Sem tools, usando content disponível: ${resposta.substring(0, 50)}`);
+      }
+      break;
+    }
+    
+    // Processar tool calls
+    console.log(`🔧 [LOOP ${iteration}] Processando ${toolCalls.length} tool calls...`);
     const toolResults: { tool_call_id: string; content: string }[] = [];
     
     for (const toolCall of toolCalls) {
@@ -927,8 +993,8 @@ async function callOpenAI(
         try {
           const args = JSON.parse(toolCall.function.arguments);
           acoes.push(args);
+          console.log(`🔧 [LOOP ${iteration}] Ação: ${args.tipo} ${args.valor || ''}`);
           
-          // Se for ação de agenda (consultar OU criar), executar e guardar resultado
           if (args.tipo === 'agenda' && executarAgendaFn) {
             const resultado = await executarAgendaFn(args.valor);
             toolResults.push({
@@ -936,7 +1002,6 @@ async function callOpenAI(
               content: JSON.stringify(resultado),
             });
           } else if (args.tipo === 'verificar_cliente' && executarVerificarClienteFn) {
-            // Executar verificação de cliente durante tool-calling para retornar resultado real para a IA
             console.log('🔍 [TOOL-CALLING] Executando verificar_cliente...');
             const resultado = await executarVerificarClienteFn();
             console.log('🔍 [TOOL-CALLING] Resultado verificar_cliente:', resultado.mensagem);
@@ -945,13 +1010,12 @@ async function callOpenAI(
               content: JSON.stringify(resultado),
             });
           } else {
-            // Instruir a IA a NÃO mencionar a ação na resposta ao cliente
             toolResults.push({
               tool_call_id: toolCall.id,
               content: JSON.stringify({ 
                 sucesso: true, 
                 mensagem: 'Ação executada internamente.',
-                instrucao: 'IMPORTANTE: Esta ação foi processada silenciosamente. NÃO mencione esta ação na sua resposta ao cliente. NÃO diga "campo atualizado", "informação salva" ou similar. Continue a conversa naturalmente, avançando para o próximo passo ou fazendo a próxima pergunta.',
+                instrucao: 'IMPORTANTE: Ação processada. NÃO mencione na resposta. Continue com a PRÓXIMA MENSAGEM DO SCRIPT conforme configurado.',
               }),
             });
           }
@@ -965,96 +1029,84 @@ async function callOpenAI(
       }
     }
     
-    // Se há ações, fazer segunda chamada com os resultados
-    if (acoes.length > 0) {
-      console.log('Tool call detectado, fazendo segunda chamada com resultados...');
-      
-      // Montar mensagens com o resultado do tool call
-      const toolResultMessages: any[] = [
-        ...messages,
-        message, // Mensagem original com tool_calls
+    // Atualizar mensagens para próxima iteração
+    currentMessages = [
+      ...currentMessages,
+      message, // Mensagem com tool_calls
+    ];
+    
+    for (const result of toolResults) {
+      currentMessages.push({
+        role: 'tool',
+        tool_call_id: result.tool_call_id,
+        content: result.content,
+      });
+    }
+    
+    // Se chegou na última iteração sem resposta, o loop forçará texto
+    if (iteration === MAX_ITERATIONS - 1 && !resposta) {
+      console.log('⚠️ [LOOP] Penúltima iteração sem resposta, próxima forçará texto');
+    }
+  }
+  
+  // Se após o loop ainda não temos resposta substancial, tentar chamada final texto-only
+  if (!resposta || resposta.length < 15 || resposta.match(/^(Entendido!?|Certo!?|Ok!?|Processando|Aguarde)[\s.!]*$/i)) {
+    console.log('⚠️ [FALLBACK] Resposta insuficiente, tentando chamada texto-only final...');
+    
+    try {
+      const fallbackMessages = [
+        ...currentMessages,
+        {
+          role: 'user',
+          content: '[SISTEMA] Todas as ações foram executadas. Agora você DEVE responder ao cliente com a MENSAGEM EXATA do script/prompt configurado. Use o texto literal entre aspas. NÃO chame ferramentas. Responda APENAS com o texto para o cliente.',
+        },
       ];
       
-      // Adicionar resultado de cada tool call
-      for (const result of toolResults) {
-        toolResultMessages.push({
-          role: 'tool',
-          tool_call_id: result.tool_call_id,
-          content: result.content,
-        });
-      }
-      
-      // Segunda chamada para obter resposta textual com os resultados
-      // IMPORTANTE: Incluir tools para permitir que a IA chame novas ações após receber resultado
-      const continuationBody: any = {
+      const fallbackBody: any = {
         model: modelo,
-        messages: toolResultMessages,
-        tools: tools,
-        tool_choice: forcarFerramentaAgenda ? 'required' : 'auto',
+        messages: fallbackMessages,
+        // Sem tools para forçar resposta textual
       };
       
       if (isModeloNovo) {
-        continuationBody.max_completion_tokens = maxTokens;
+        fallbackBody.max_completion_tokens = maxTokens;
       } else {
-        continuationBody.max_tokens = maxTokens;
-        continuationBody.temperature = temperatura;
+        fallbackBody.max_tokens = maxTokens;
+        fallbackBody.temperature = temperatura;
       }
       
-      try {
-        const continuationResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(continuationBody),
-        });
+      const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(fallbackBody),
+      });
+      
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json();
+        const fallbackContent = fallbackData.choices?.[0]?.message?.content || '';
         
-        if (continuationResponse.ok) {
-          const continuationData = await continuationResponse.json();
-          const continuationMessage = continuationData.choices?.[0]?.message;
-          resposta = continuationMessage?.content || '';
-          console.log('Resposta da continuação:', resposta.substring(0, 100));
+        if (fallbackContent && fallbackContent.length > 15) {
+          console.log(`✅ [FALLBACK] Resposta obtida: ${fallbackContent.substring(0, 80)}...`);
+          resposta = fallbackContent;
           
-          // Verificar se há novas tool_calls na continuação (ex: ir_etapa após verificar_cliente)
-          const newToolCalls = continuationMessage?.tool_calls;
-          if (newToolCalls && newToolCalls.length > 0) {
-            console.log('🔧 [CONTINUAÇÃO] Novas ações detectadas:', newToolCalls.length);
-            for (const toolCall of newToolCalls) {
-              if (toolCall.function?.name === 'executar_acao') {
-                try {
-                  const args = JSON.parse(toolCall.function.arguments);
-                  console.log('🔧 [CONTINUAÇÃO] Ação adicional:', args.tipo, args.valor || '');
-                  acoes.push(args);
-                } catch (e) {
-                  console.error('Erro ao parsear ação da continuação:', e);
-                }
-              }
-            }
-          }
+          // Acumular tokens do fallback
+          const fallbackUsage = fallbackData.usage || {};
+          tokens.prompt_tokens += fallbackUsage.prompt_tokens || 0;
+          tokens.completion_tokens += fallbackUsage.completion_tokens || 0;
+          tokens.total_tokens += fallbackUsage.total_tokens || 0;
         }
-      } catch (e) {
-        console.error('Erro na segunda chamada OpenAI:', e);
       }
-      
-      // Fallback se ainda não houver resposta
-      if (!resposta) {
-        resposta = 'Entendido! Estou processando sua solicitação.';
-      }
+    } catch (e) {
+      console.error('Erro no fallback texto-only:', e);
     }
   }
 
   if (!resposta && acoes.length === 0) {
     throw new Error('Resposta vazia da OpenAI');
   }
-
-  // Extrair informações de tokens
-  const usage = data.usage || {};
-  const tokens = {
-    prompt_tokens: usage.prompt_tokens || 0,
-    completion_tokens: usage.completion_tokens || 0,
-    total_tokens: usage.total_tokens || 0,
-  };
 
   return { resposta, provider: 'openai', acoes: acoes.length > 0 ? acoes : undefined, tokens };
 }
