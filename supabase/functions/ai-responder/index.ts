@@ -2228,6 +2228,34 @@ serve(async (req) => {
       // Usar ações filtradas a partir daqui
       result.acoes = acoesFiltradas;
       
+      // 🆕 DEDUPLICAÇÃO: Remover ações estruturais duplicadas (ex: 3x finalizar -> 1x finalizar)
+      const tiposEstruturaisDedup = ['etapa', 'ir_etapa', 'followup', 'transferir', 'finalizar', 'tag', 'negociacao', 'notificar'];
+      const acoesVistasPorTipo = new Set<string>();
+      const acoesDedupicadas: Acao[] = [];
+      let duplicatasRemovidas = 0;
+      
+      for (const acao of result.acoes) {
+        // Para ações estruturais, criar chave única por tipo+valor
+        if (tiposEstruturaisDedup.includes(acao.tipo)) {
+          const chave = `${acao.tipo}:${acao.valor || ''}`;
+          if (acoesVistasPorTipo.has(chave)) {
+            console.log(`🔄 [DEDUP] Ação duplicada ignorada: ${chave}`);
+            duplicatasRemovidas++;
+            continue;
+          }
+          acoesVistasPorTipo.add(chave);
+        }
+        acoesDedupicadas.push(acao);
+      }
+      
+      if (duplicatasRemovidas > 0) {
+        console.log(`⚠️ [DEDUP] Removidas ${duplicatasRemovidas} ações duplicadas`);
+      }
+      console.log(`🔄 [DEDUP] ${acoesDedupicadas.length} ações após deduplicação (de ${result.acoes.length})`);
+      
+      // Substituir result.acoes pela versão deduplicada
+      result.acoes = acoesDedupicadas;
+      
       // BLINDAGEM MELHORADA: Preservar ações de CAPTURA (campo, nome) enquanto limita ações estruturais
       // IMPORTANTE: Não contar ações já executadas no tool-calling (agenda, verificar_cliente)
       const acoesJaExecutadas = ['agenda', 'verificar_cliente'];
@@ -2247,7 +2275,8 @@ serve(async (req) => {
       
       // Nova lógica: SEMPRE preservar ações de captura (até 5 por segurança)
       // Para ações estruturais, limitar a 1 (a mais prioritária)
-      if (acoesExecutaveis.length > 3) {
+      // 🆕 Ativar blindagem também se houver mais de 1 ação estrutural (mesmo com poucas ações totais)
+      if (acoesEstruturais.length > 1 || acoesExecutaveis.length > 3) {
         console.log('⚠️ [BLINDAGEM] Agente tentou executar', acoesExecutaveis.length, 'ações executáveis de uma vez!');
         console.log('Ações detectadas:', result.acoes.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
         
