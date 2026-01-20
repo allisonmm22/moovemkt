@@ -1496,6 +1496,9 @@ serve(async (req) => {
     }
 
     // OTIMIZAÇÃO: Carregar APENAS etapa atual + próxima (evita regressão de fluxo)
+    // Definir etapaAtual no escopo superior para uso posterior
+    let etapaAtualGlobal: { id: string; nome: string; numero: number; descricao: string | null } | null = null;
+    
     if (etapas && etapas.length > 0) {
       // Identificar etapa atual (pela coluna etapa_ia_atual ou fallback para etapa 1)
       let etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
@@ -1512,6 +1515,11 @@ serve(async (req) => {
             .eq('id', conversa_id);
           console.log('📍 [INICIALIZAR] Definindo etapa inicial na conversa:', etapaAtual.nome);
         }
+      }
+      
+      // Salvar referência para uso posterior (detecção de placeholders, auto-captura)
+      if (etapaAtual) {
+        etapaAtualGlobal = etapaAtual;
       }
       
       if (etapaAtual) {
@@ -1735,8 +1743,14 @@ serve(async (req) => {
     }
 
     // Detectar placeholders dinâmicos no prompt e adicionar instruções especiais
-    const promptAgente = agente?.prompt_sistema || '';
-    const instrucoesPlaceholders = detectarAcoesComPlaceholders(promptAgente);
+  // Combinar prompt_sistema + descrição da etapa como UM ÚNICO DOCUMENTO para detecção
+  const promptAgente = agente?.prompt_sistema || '';
+  let descricaoEtapaTexto = '';
+  if (etapaAtualGlobal?.descricao) {
+    descricaoEtapaTexto = extractTextFromTiptapJson(etapaAtualGlobal.descricao);
+  }
+  const documentoCompleto = promptAgente + '\n\n' + descricaoEtapaTexto;
+  const instrucoesPlaceholders = detectarAcoesComPlaceholders(documentoCompleto);
     if (instrucoesPlaceholders.length > 0) {
       promptCompleto += '\n## 🔄 SUBSTITUIÇÃO DINÂMICA DE PLACEHOLDERS\n';
       promptCompleto += 'O prompt contém ações com placeholders (ex: {valor-do-lead}). Você DEVE substituí-los pelo valor real:\n';
@@ -1868,6 +1882,41 @@ serve(async (req) => {
     const saudacoes = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'hi'];
     const ehSaudacao = saudacoes.some(s => mensagem.toLowerCase().trim().startsWith(s));
     const temPlaceholdersDinamicos = instrucoesPlaceholders.length > 0;
+    
+    // ======= AUTO-CAPTURA DETERMINÍSTICA =======
+    // Detectar campos pendentes de captura na etapa atual (não depende da IA)
+    const regexCampoCaptura = /@campo:([a-z0-9-]+):\{[^}]+\}/gi;
+    const camposCapturaPendentes = [...descricaoEtapaTexto.matchAll(regexCampoCaptura)]
+      .map(m => m[1]);
+    
+    // Se há campos pendentes e NÃO é saudação, capturar automaticamente ANTES de chamar a IA
+    if (camposCapturaPendentes.length > 0 && !ehSaudacao && mensagem.trim().length > 0) {
+      const campoPendente = camposCapturaPendentes[0]; // Primeiro campo pendente
+      console.log(`🎯 [AUTO-CAPTURA] Campo pendente detectado: ${campoPendente}`);
+      console.log(`🎯 [AUTO-CAPTURA] Mensagem EXATA do lead: "${mensagem.trim()}"`);
+      
+      try {
+        const autoResponse = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+          method: 'POST',
+          headers: { 
+            'Authorization': `Bearer ${supabaseKey}`, 
+            'Content-Type': 'application/json' 
+          },
+          body: JSON.stringify({
+            acao: { tipo: 'campo', valor: `${campoPendente}:${mensagem.trim()}` },
+            conversa_id,
+            contato_id: contatoId,
+            conta_id,
+          }),
+        });
+        
+        const autoResult = await autoResponse.json();
+        console.log(`✅ [AUTO-CAPTURA] Campo "${campoPendente}" = "${mensagem.trim()}" - Resultado:`, autoResult);
+      } catch (autoError) {
+        console.error('❌ [AUTO-CAPTURA] Erro ao salvar campo:', autoError);
+      }
+    }
+    // ======= FIM AUTO-CAPTURA =======
     
     let forcarToolChoice = forcarFerramentaAgenda;
     if (temPlaceholdersDinamicos && !ehSaudacao && !forcarToolChoice) {
@@ -2059,6 +2108,9 @@ serve(async (req) => {
     let respostaFinal = result.resposta;
     respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|ir_etapa)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
+    
+    // Remover @ antes de nomes próprios na resposta (ex: @Allison -> Allison)
+    respostaFinal = respostaFinal.replace(/@([A-ZÀ-Ú][a-zà-ú]+)/g, '$1');
     
     // Remover menções de transferência que possam ter escapado (reforçado)
     respostaFinal = respostaFinal.replace(/estou transferindo.*?(humano|agente|atendente).*?\./gi, '').trim();
