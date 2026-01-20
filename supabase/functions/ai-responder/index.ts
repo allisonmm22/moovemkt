@@ -2071,7 +2071,7 @@ serve(async (req) => {
         acoesPermitidas.add('campo');
       }
       
-      console.log('📋 [FILTRO] Campos específicos permitidos:', Array.from(camposConfiguradosFiltro));
+      console.log('📋 [FILTRO] Campos específicos configurados:', Array.from(camposConfiguradosFiltro));
       
       if (documentoFiltro.includes('@negociacao') || documentoFiltro.includes('@negociaçao')) {
         acoesPermitidas.add('negociacao');
@@ -2098,13 +2098,48 @@ serve(async (req) => {
       
       console.log('📋 [FILTRO] Ações permitidas pelo prompt:', Array.from(acoesPermitidas));
       
+      // 🆕 FILTRO CONTEXTUAL: Detectar qual campo está sendo PEDIDO na última mensagem do agente
+      // Buscar última mensagem enviada pelo agente (antes da resposta atual do lead)
+      // Usar o histórico de mensagens já carregado
+      const ultimaMensagemAgente = historico
+        .filter((m: { direcao: string; conteudo: string }) => m.direcao === 'saida')
+        .slice(-1)[0]?.conteudo?.toLowerCase() || '';
+      
+      console.log('📋 [CONTEXTO] Última pergunta do agente:', ultimaMensagemAgente.substring(0, 150));
+      
+      // Função para detectar campo esperado dinamicamente baseado na pergunta
+      const detectarCampoEsperado = (pergunta: string, camposDisponiveis: Set<string>): string | null => {
+        for (const campo of camposDisponiveis) {
+          // Converter "tipo-do-seu-plano" para "tipo do seu plano" para matching
+          const campoLegivel = campo.replace(/-/g, ' ').toLowerCase();
+          // Também tentar variações sem "seu/sua"
+          const campoSimplificado = campoLegivel.replace(/\s+(seu|sua|do|da|de)\s+/g, ' ').trim();
+          
+          if (pergunta.includes(campoLegivel) || pergunta.includes(campoSimplificado)) {
+            return campo;
+          }
+          
+          // Tentar match parcial com palavras-chave do campo
+          const palavrasChave = campo.split('-').filter(p => p.length > 2);
+          for (const palavra of palavrasChave) {
+            if (pergunta.includes(palavra.toLowerCase())) {
+              return campo;
+            }
+          }
+        }
+        return null;
+      };
+      
+      const campoEsperado = detectarCampoEsperado(ultimaMensagemAgente, camposConfiguradosFiltro);
+      console.log('📋 [CONTEXTO] Campo esperado baseado na pergunta:', campoEsperado || 'nenhum detectado');
+      
       // Filtrar ações que o modelo inventou (não estão no prompt)
       const acoesOriginais = [...result.acoes];
       const acoesFiltradas = result.acoes.filter(a => {
         // Ações de agenda/verificar são sempre permitidas (executadas no tool-calling)
         if (['agenda', 'verificar_cliente'].includes(a.tipo)) return true;
         
-        // 🆕 FILTRO ESPECÍFICO PARA CAMPOS: verificar se o campo específico está configurado
+        // 🆕 FILTRO ESPECÍFICO PARA CAMPOS: verificar se o campo específico está configurado E é o esperado
         if (a.tipo === 'campo') {
           // Extrair nome do campo da ação (ex: "estado:Bahia" -> "estado")
           const nomeCampoAcao = a.valor?.split(':')[0]?.toLowerCase().trim();
@@ -2112,10 +2147,20 @@ serve(async (req) => {
             console.log('⚠️ [FILTRO] Campo sem nome válido, descartando:', a.valor);
             return false;
           }
+          
+          // Primeiro: verificar se o campo está configurado no prompt
           if (!camposConfiguradosFiltro.has(nomeCampoAcao)) {
             console.log('⚠️ [FILTRO] Campo não configurado no prompt, descartando:', nomeCampoAcao, '| Configurados:', Array.from(camposConfiguradosFiltro));
             return false;
           }
+          
+          // 🆕 Segundo: se detectamos um campo esperado pelo contexto, só permitir esse campo
+          if (campoEsperado && nomeCampoAcao !== campoEsperado) {
+            console.log('⛔ [CONTEXTO] Campo bloqueado (não é o esperado pelo contexto):', nomeCampoAcao, '| Esperado:', campoEsperado);
+            return false;
+          }
+          
+          console.log('✅ [FILTRO] Campo permitido:', nomeCampoAcao);
           return true;
         }
         
@@ -2125,7 +2170,7 @@ serve(async (req) => {
       
       const acoesDescartadas = acoesOriginais.filter(a => !acoesFiltradas.includes(a));
       if (acoesDescartadas.length > 0) {
-        console.log('⚠️ [FILTRO] Ações descartadas (não estão no prompt):', acoesDescartadas.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
+        console.log('⚠️ [FILTRO] Ações descartadas:', acoesDescartadas.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
       }
       
       // Usar ações filtradas a partir daqui
