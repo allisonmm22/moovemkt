@@ -42,6 +42,7 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
   const [cancelarId, setCancelarId] = useState<string | null>(null);
   const [cancelando, setCancelando] = useState(false);
   const [showCancelados, setShowCancelados] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const fetchFollowups = async () => {
     try {
@@ -128,89 +129,100 @@ export function FollowupsAgendadosSection({ contatoId }: FollowupsAgendadosSecti
 
   return (
     <>
-      <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <Calendar className="h-4 w-4 text-amber-500" />
-            <span className="text-sm font-semibold text-foreground">Follow-ups</span>
-          </div>
-          {followups.length > 0 && (
-            <span className="px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded-full">
-              {followups.length} total
-            </span>
-          )}
-        </div>
+      <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+        <div className="mt-4 bg-card rounded-2xl border border-border shadow-lg p-4">
+          <CollapsibleTrigger className="flex items-center justify-between w-full cursor-pointer hover:bg-muted/50 rounded -m-2 p-2 transition-colors">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-semibold text-foreground">Follow-ups</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {followups.length > 0 && (
+                <span className="px-2 py-0.5 text-[10px] font-medium bg-muted text-muted-foreground rounded-full">
+                  {followups.length} total
+                </span>
+              )}
+              {isOpen ? (
+                <ChevronUp className="h-4 w-4 text-muted-foreground" />
+              ) : (
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              )}
+            </div>
+          </CollapsibleTrigger>
 
-        {followups.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-3">
-            Nenhum follow-up agendado
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {/* Pendentes */}
-            {pendentes.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
-                    Pendentes ({pendentes.length})
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {pendentes.map((followup) => (
-                    <FollowupCard 
-                      key={followup.id} 
-                      followup={followup} 
-                      onCancel={() => setCancelarId(followup.id)} 
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Enviados */}
-            {enviados.length > 0 && (
-              <div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
-                    Enviados ({enviados.length})
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {enviados.map((followup) => (
-                    <FollowupCard key={followup.id} followup={followup} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Cancelados - Colapsado */}
-            {cancelados.length > 0 && (
-              <Collapsible open={showCancelados} onOpenChange={setShowCancelados}>
-                <CollapsibleTrigger className="flex items-center gap-1.5 w-full hover:bg-muted/50 rounded py-1 -mx-1 px-1 transition-colors">
-                  <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
-                  <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
-                    Cancelados ({cancelados.length})
-                  </span>
-                  {showCancelados ? (
-                    <ChevronUp className="h-3 w-3 text-muted-foreground ml-auto" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
-                  )}
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="space-y-2 mt-2">
-                    {cancelados.map((followup) => (
-                      <FollowupCard key={followup.id} followup={followup} />
-                    ))}
+          <CollapsibleContent>
+            {followups.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-3 mt-2">
+                Nenhum follow-up agendado
+              </p>
+            ) : (
+              <div className="space-y-3 mt-3">
+                {/* Pendentes */}
+                {pendentes.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wide">
+                        Pendentes ({pendentes.length})
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {pendentes.map((followup) => (
+                        <FollowupCard 
+                          key={followup.id} 
+                          followup={followup} 
+                          onCancel={() => setCancelarId(followup.id)} 
+                        />
+                      ))}
+                    </div>
                   </div>
-                </CollapsibleContent>
-              </Collapsible>
+                )}
+
+                {/* Enviados */}
+                {enviados.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                        Enviados ({enviados.length})
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {enviados.map((followup) => (
+                        <FollowupCard key={followup.id} followup={followup} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cancelados - Colapsado */}
+                {cancelados.length > 0 && (
+                  <Collapsible open={showCancelados} onOpenChange={setShowCancelados}>
+                    <CollapsibleTrigger className="flex items-center gap-1.5 w-full hover:bg-muted/50 rounded py-1 -mx-1 px-1 transition-colors">
+                      <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50" />
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+                        Cancelados ({cancelados.length})
+                      </span>
+                      {showCancelados ? (
+                        <ChevronUp className="h-3 w-3 text-muted-foreground ml-auto" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 text-muted-foreground ml-auto" />
+                      )}
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="space-y-2 mt-2">
+                        {cancelados.map((followup) => (
+                          <FollowupCard key={followup.id} followup={followup} />
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </div>
             )}
-          </div>
-        )}
-      </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       <AlertDialog open={!!cancelarId} onOpenChange={(open) => !open && setCancelarId(null)}>
         <AlertDialogContent>
