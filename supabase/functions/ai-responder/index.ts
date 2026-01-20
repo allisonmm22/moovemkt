@@ -1864,10 +1864,21 @@ serve(async (req) => {
       return await executarVerificarCliente(supabase, conta_id, conversa_id, contatoId);
     };
 
+    // Forçar tool_choice se há placeholders E a mensagem parece conter uma resposta (não é saudação)
+    const saudacoes = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hello', 'hi'];
+    const ehSaudacao = saudacoes.some(s => mensagem.toLowerCase().trim().startsWith(s));
+    const temPlaceholdersDinamicos = instrucoesPlaceholders.length > 0;
+    
+    let forcarToolChoice = forcarFerramentaAgenda;
+    if (temPlaceholdersDinamicos && !ehSaudacao && !forcarToolChoice) {
+      console.log('🔧 [TOOL CHOICE] Forçando uso de ferramenta - placeholders dinâmicos detectados');
+      forcarToolChoice = true;
+    }
+
     // Usar OpenAI (único provedor suportado)
     try {
       console.log('Usando OpenAI com modelo:', modelo);
-      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn, forcarFerramentaAgenda, executarVerificarClienteFn);
+      result = await callOpenAI(conta.openai_api_key, messages, modelo, maxTokens, temperatura, tools, executarAgendaFn, forcarToolChoice, executarVerificarClienteFn);
       console.log('✅ Resposta via OpenAI');
     } catch (openaiError: any) {
       const errorMsg = openaiError.message || '';
@@ -2063,6 +2074,35 @@ serve(async (req) => {
     
     // Padrão: "Perfeito, estado registrado!" ou similar no início
     respostaFinal = respostaFinal.replace(/^(Perfeito|Ótimo|Certo|OK|Entendi|Anotado)[,!.]?\s*[^.!?]*\s*(registrado|salvo|atualizado|gravado)[^.!?]*[.!?]?\s*/gi, '').trim();
+    
+    // Padrão: 📝 Campo "operadora-do-plano" atualizado para "Amil" (formato com aspas)
+    respostaFinal = respostaFinal.replace(/📝\s*Campo\s*"[^"]+"\s*(atualizado|registrado|salvo)\s*para\s*"[^"]+"\s*\.?\s*/gi, '').trim();
+    
+    // Padrão mais amplo: qualquer confirmação com "atualizado para" ou "registrado como"
+    respostaFinal = respostaFinal.replace(/[^\n]*\s*(atualizado|registrado|salvo)\s*(para|como)\s*"[^"]+"\s*\.?\s*/gi, '').trim();
+    
+    // FALLBACK: Extrair ações que a IA escreveu no texto mas não chamou como tool
+    const regexCampoConfirmacao = /📝\s*Campo\s*"([^"]+)"\s*(atualizado|registrado|salvo)\s*para\s*"([^"]+)"/gi;
+    const matchesCampo = [...result.resposta.matchAll(regexCampoConfirmacao)];
+    
+    if (matchesCampo.length > 0 && result.acoes) {
+      console.log('🔧 [FALLBACK] Detectadas confirmações de campo no texto, verificando se foram executadas...');
+      
+      for (const match of matchesCampo) {
+        const nomeCampo = match[1].toLowerCase().replace(/\s+/g, '-');
+        const valorCampo = match[3];
+        
+        // Verificar se já existe ação para este campo
+        const jaExiste = result.acoes.some(a => 
+          a.tipo === 'campo' && a.valor?.toLowerCase().startsWith(nomeCampo.toLowerCase())
+        );
+        
+        if (!jaExiste) {
+          console.log(`🔧 [FALLBACK] Adicionando ação extraída do texto: campo:${nomeCampo}:${valorCampo}`);
+          result.acoes.push({ tipo: 'campo', valor: `${nomeCampo}:${valorCampo}` });
+        }
+      }
+    }
     
     // Detectar se a resposta inteira é uma mensagem de sistema e gerar fallback
     const ehApenasMensagemSistema = /^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)/.test(result.resposta) &&
