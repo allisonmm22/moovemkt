@@ -12,7 +12,7 @@ import { extractTextFromTiptapJson } from '@/lib/richTextUtils';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { AcaoInteligenteModal } from '@/components/AcaoInteligenteModal';
-import { RichTextEditor, inserirAcaoNoRichEditor } from '@/components/RichTextEditor';
+import { RichTextEditor, type RichTextEditorRef } from '@/components/RichTextEditor';
 import { DescricaoEditor, inserirAcaoNoEditor } from '@/components/DescricaoEditor';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
@@ -825,6 +825,7 @@ function PromptAgenteTab({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalAcao, setModalAcao] = useState(false);
+  const editorRef = useRef<RichTextEditorRef>(null);
 
   useEffect(() => {
     if (prompt) {
@@ -873,10 +874,9 @@ function PromptAgenteTab({
   };
 
   const handleAcaoInsert = (action: string) => {
-    if (!prompt) return;
-    inserirAcaoNoRichEditor(prompt.descricao, action, (novaDescricao) => {
-      setPrompt({ ...prompt, descricao: novaDescricao });
-    });
+    if (editorRef.current) {
+      editorRef.current.insertAction(action);
+    }
   };
 
   const savePrompt = async () => {
@@ -970,6 +970,7 @@ function PromptAgenteTab({
             </div>
             
             <RichTextEditor
+              ref={editorRef}
               value={prompt.descricao}
               onChange={(value) => setPrompt({ ...prompt, descricao: value })}
               placeholder="Descreva o comportamento do agente...
