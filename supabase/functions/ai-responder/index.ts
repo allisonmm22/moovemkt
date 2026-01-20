@@ -1385,11 +1385,13 @@ serve(async (req) => {
       const limiteContexto = agente.quantidade_mensagens_contexto || 20;
       console.log('Limite de mensagens no contexto:', limiteContexto);
       
+      // 🔧 CORREÇÃO: Buscar as mensagens MAIS RECENTES (não as mais antigas)
+      // Ordenar por DESC para pegar as últimas, depois reverter para ordem cronológica
       let historicoQuery = supabase
         .from('mensagens')
         .select('conteudo, direcao, created_at')
         .eq('conversa_id', conversa_id)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false }) // DESC para pegar as ÚLTIMAS
         .limit(limiteContexto);
 
       // Se há data de limpeza de memória, ignorar mensagens anteriores
@@ -1399,7 +1401,9 @@ serve(async (req) => {
       }
 
       const { data: historicoData } = await historicoQuery;
-      historico = historicoData || [];
+      // Reverter para ordem cronológica (mais antiga primeiro, mais recente por último)
+      historico = (historicoData || []).reverse();
+      console.log('📋 [HISTÓRICO] Carregadas', historico.length, 'mensagens mais recentes');
     }
 
     // 7. Parsear ações das etapas para construir ferramentas
@@ -2098,40 +2102,87 @@ serve(async (req) => {
       
       console.log('📋 [FILTRO] Ações permitidas pelo prompt:', Array.from(acoesPermitidas));
       
-      // 🆕 FILTRO CONTEXTUAL: Detectar qual campo está sendo PEDIDO na última mensagem do agente
-      // Buscar última mensagem enviada pelo agente (antes da resposta atual do lead)
-      // Usar o histórico de mensagens já carregado
-      const ultimaMensagemAgente = historico
-        .filter((m: { direcao: string; conteudo: string }) => m.direcao === 'saida')
-        .slice(-1)[0]?.conteudo?.toLowerCase() || '';
+      // 🆕 FILTRO CONTEXTUAL MELHORADO: Detectar qual campo está sendo PEDIDO
+      // Encontrar a última mensagem de ENTRADA (do lead) e a mensagem do agente ANTES dela
+      const mensagensEntrada = historico.filter((m: { direcao: string }) => m.direcao === 'entrada');
+      const ultimaEntrada = mensagensEntrada.slice(-1)[0];
+      
+      // Buscar a última mensagem do agente que veio ANTES da última entrada do lead
+      let ultimaMensagemAgente = '';
+      if (ultimaEntrada) {
+        const mensagensAgente = historico.filter((m: { direcao: string; created_at: string }) => 
+          m.direcao === 'saida' && new Date(m.created_at) < new Date(ultimaEntrada.created_at)
+        );
+        ultimaMensagemAgente = mensagensAgente.slice(-1)[0]?.conteudo?.toLowerCase() || '';
+      } else {
+        // Fallback: pegar última mensagem de saída
+        ultimaMensagemAgente = historico
+          .filter((m: { direcao: string }) => m.direcao === 'saida')
+          .slice(-1)[0]?.conteudo?.toLowerCase() || '';
+      }
       
       console.log('📋 [CONTEXTO] Última pergunta do agente:', ultimaMensagemAgente.substring(0, 150));
       
-      // Função para detectar campo esperado dinamicamente baseado na pergunta
+      // 🆕 DETECÇÃO POR SCORE: Evitar confusão com palavras genéricas como "plano"
+      const stopwords = new Set(['do', 'da', 'de', 'seu', 'sua', 'qual', 'como', 'que', 'por', 'para', 'com', 'em', 'um', 'uma', 'nos', 'nos', 'voce', 'você', 'meu', 'minha', 'seu', 'sua', 'o', 'a', 'os', 'as', 'é', 'e', 'plano', 'saude', 'saúde']);
+      
       const detectarCampoEsperado = (pergunta: string, camposDisponiveis: Set<string>): string | null => {
+        if (!pergunta || camposDisponiveis.size === 0) return null;
+        
+        // Normalizar pergunta (remover acentos e pontuação)
+        const perguntaNorm = pergunta
+          .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+          .replace(/[?!.,;:]/g, '')
+          .toLowerCase();
+        
+        let melhorCampo: string | null = null;
+        let melhorScore = 0;
+        
         for (const campo of camposDisponiveis) {
-          // Converter "tipo-do-seu-plano" para "tipo do seu plano" para matching
-          const campoLegivel = campo.replace(/-/g, ' ').toLowerCase();
-          // Também tentar variações sem "seu/sua"
-          const campoSimplificado = campoLegivel.replace(/\s+(seu|sua|do|da|de)\s+/g, ' ').trim();
+          // Converter "tipo-do-seu-plano" para palavras separadas
+          const palavrasCampo = campo.split('-').map(p => 
+            p.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+          );
           
-          if (pergunta.includes(campoLegivel) || pergunta.includes(campoSimplificado)) {
-            return campo;
+          let score = 0;
+          
+          // Verificar frase completa (ex: "operadora do plano")
+          const fraseCompleta = palavrasCampo.join(' ');
+          if (perguntaNorm.includes(fraseCompleta)) {
+            score += 100;
           }
           
-          // Tentar match parcial com palavras-chave do campo
-          const palavrasChave = campo.split('-').filter(p => p.length > 2);
-          for (const palavra of palavrasChave) {
-            if (pergunta.includes(palavra.toLowerCase())) {
-              return campo;
+          // Contar palavras relevantes (não stopwords) que aparecem na pergunta
+          for (const palavra of palavrasCampo) {
+            if (palavra.length < 3 || stopwords.has(palavra)) continue;
+            
+            if (perguntaNorm.includes(palavra)) {
+              // Palavra forte (tipo, operadora, estado, valor, cnpj, etc.)
+              score += 30;
+              
+              // Bonus se a palavra aparece como palavra inteira (não substring)
+              const regex = new RegExp(`\\b${palavra}\\b`, 'i');
+              if (regex.test(perguntaNorm)) {
+                score += 20;
+              }
             }
           }
+          
+          if (score > melhorScore) {
+            melhorScore = score;
+            melhorCampo = campo;
+          }
         }
-        return null;
+        
+        // Só retornar se tiver score mínimo aceitável (evita falsos positivos)
+        const scoreMinimo = 30;
+        console.log('📋 [CONTEXTO] Score do campo detectado:', melhorCampo, '=', melhorScore);
+        
+        return melhorScore >= scoreMinimo ? melhorCampo : null;
       };
       
       const campoEsperado = detectarCampoEsperado(ultimaMensagemAgente, camposConfiguradosFiltro);
-      console.log('📋 [CONTEXTO] Campo esperado baseado na pergunta:', campoEsperado || 'nenhum detectado');
+      console.log('📋 [CONTEXTO] Campo esperado baseado na pergunta:', campoEsperado || 'nenhum detectado (fallback ativado)');
       
       // Filtrar ações que o modelo inventou (não estão no prompt)
       const acoesOriginais = [...result.acoes];
@@ -2160,7 +2211,8 @@ serve(async (req) => {
             return false;
           }
           
-          console.log('✅ [FILTRO] Campo permitido:', nomeCampoAcao);
+          // 🆕 Fallback: se não detectou contexto, ainda assim permitir (mas limitar a 1 campo por msg)
+          console.log('✅ [FILTRO] Campo permitido:', nomeCampoAcao, campoEsperado ? '(contexto)' : '(fallback)');
           return true;
         }
         
