@@ -1445,8 +1445,40 @@ serve(async (req) => {
       }
     }
 
-    // 8. Montar o prompt completo
-    let promptCompleto = agente.prompt_sistema || '';
+    // 8. Montar o prompt completo - UNIFICANDO prompt do agente + etapa como documento único
+    // Buscar etapa atual ANTES de montar o prompt (para unificar)
+    let etapaAtualUnificada: { id: string; nome: string; numero: number; descricao: string | null } | null = null;
+    
+    if (etapas && etapas.length > 0) {
+      etapaAtualUnificada = etapas.find((e: any) => e.id === etapaIAAtual) ||
+                           etapas.find((e: any) => e.numero === 1) || 
+                           etapas[0] || null;
+      
+      // Persistir etapa inicial se não estava definida
+      if (etapaAtualUnificada && !etapaIAAtual) {
+        await supabase
+          .from('conversas')
+          .update({ etapa_ia_atual: etapaAtualUnificada.id })
+          .eq('id', conversa_id);
+        console.log('📍 [INICIALIZAR] Definindo etapa inicial:', etapaAtualUnificada.nome);
+      }
+    }
+    
+    // Montar prompt unificado (prompt_sistema + etapa.descricao como documento único)
+    let promptDoAgente = agente.prompt_sistema || '';
+    let descricaoEtapaUnificada = '';
+    
+    if (etapaAtualUnificada?.descricao) {
+      descricaoEtapaUnificada = extractTextFromTiptapJson(etapaAtualUnificada.descricao);
+    }
+    
+    // UNIFICAR: prompt + etapa fluem como um único documento de instruções
+    let promptCompleto = promptDoAgente;
+    if (descricaoEtapaUnificada) {
+      promptCompleto += '\n\n' + descricaoEtapaUnificada;
+    }
+    
+    console.log('📋 Prompt unificado montado (agente + etapa como documento único)');
 
     // Adicionar contexto temporal (Brasil - UTC-3)
     const agora = new Date();
@@ -1563,68 +1595,33 @@ serve(async (req) => {
       promptCompleto += `Não mencione que recebeu o texto extraído do PDF. Aja como se tivesse lido o documento diretamente.\n`;
     }
 
-    // OTIMIZAÇÃO: Carregar APENAS etapa atual + próxima (evita regressão de fluxo)
-    // Definir etapaAtual no escopo superior para uso posterior
-    let etapaAtualGlobal: { id: string; nome: string; numero: number; descricao: string | null } | null = null;
+    // Referência global da etapa para uso posterior (já carregada no início)
+    const etapaAtualGlobal = etapaAtualUnificada;
     
-    if (etapas && etapas.length > 0) {
-      // Identificar etapa atual (pela coluna etapa_ia_atual ou fallback para etapa 1)
-      let etapaAtual = etapas.find((e: any) => e.id === etapaIAAtual);
+    // Adicionar apenas marcador de contexto da etapa (sem repetir descrição - já está unificada acima)
+    if (etapaAtualUnificada) {
+      promptCompleto += '\n\n---\n';
+      promptCompleto += `📍 **Etapa atual: ${etapaAtualUnificada.numero} - ${etapaAtualUnificada.nome}**\n`;
       
-      // Se não há etapa definida, usar a primeira etapa (número 1) E PERSISTIR NA CONVERSA
-      if (!etapaAtual) {
-        etapaAtual = etapas.find((e: any) => e.numero === 1) || etapas[0];
-        
-        // Persistir a etapa inicial na conversa para exibição no frontend
-        if (etapaAtual) {
-          await supabase
-            .from('conversas')
-            .update({ etapa_ia_atual: etapaAtual.id })
-            .eq('id', conversa_id);
-          console.log('📍 [INICIALIZAR] Definindo etapa inicial na conversa:', etapaAtual.nome);
-        }
+      // Contexto de cliente para instruções condicionais
+      if (crmContexto?.is_cliente) {
+        promptCompleto += '⭐ O LEAD É CLIENTE\n';
+      } else {
+        promptCompleto += '📋 O LEAD NÃO É CLIENTE\n';
       }
       
-      // Salvar referência para uso posterior (detecção de placeholders, auto-captura)
-      if (etapaAtual) {
-        etapaAtualGlobal = etapaAtual;
-      }
-      
-      if (etapaAtual) {
-        promptCompleto += '\n\n## ETAPA ATUAL DE ATENDIMENTO\n';
-        promptCompleto += `**Você está na Etapa ${etapaAtual.numero}: ${etapaAtual.nome}**\n\n`;
-        
-        // Adicionar contexto EXPLÍCITO sobre status de cliente para instruções condicionais
-        if (crmContexto?.is_cliente) {
-          promptCompleto += '**⚠️ IMPORTANTE: O LEAD É CLIENTE - Execute instruções para CLIENTE**\n\n';
-        } else {
-          promptCompleto += '**⚠️ IMPORTANTE: O LEAD NÃO É CLIENTE - Execute instruções para NÃO CLIENTE**\n\n';
-        }
-        
-        promptCompleto += 'Siga RIGOROSAMENTE as instruções desta etapa. NÃO volte para etapas anteriores:\n\n';
-        if (etapaAtual.descricao) {
-          const descricaoTexto = extractTextFromTiptapJson(etapaAtual.descricao);
-          promptCompleto += `${descricaoTexto}\n\n`;
-        }
-        
-        // Adicionar próxima etapa para progressão natural
-        const proximaEtapa = etapas.find((e: any) => e.numero === etapaAtual.numero + 1);
+      // Próxima etapa para progressão
+      if (etapas && etapas.length > 0) {
+        const proximaEtapa = etapas.find((e: any) => e.numero === etapaAtualUnificada.numero + 1);
         if (proximaEtapa) {
-          promptCompleto += '\n### PRÓXIMA ETAPA (quando concluir a atual)\n';
-          promptCompleto += `Quando completar os objetivos da etapa atual, use a ação @ir_etapa:${proximaEtapa.numero} para avançar para:\n`;
-          promptCompleto += `**Etapa ${proximaEtapa.numero}: ${proximaEtapa.nome}**\n`;
-          if (proximaEtapa.descricao) {
-            // Mostrar apenas resumo da próxima etapa (primeiras 300 caracteres)
-            const descricaoProxTexto = extractTextFromTiptapJson(proximaEtapa.descricao);
-            const resumo = descricaoProxTexto.substring(0, 300);
-            promptCompleto += `Resumo: ${resumo}${descricaoProxTexto.length > 300 ? '...' : ''}\n`;
-          }
+          promptCompleto += `➡️ Próxima etapa: @ir_etapa:${proximaEtapa.numero} (${proximaEtapa.nome})\n`;
         } else {
-          promptCompleto += '\n*Esta é a última etapa do fluxo de atendimento.*\n';
+          promptCompleto += '✅ Esta é a última etapa do fluxo\n';
         }
-        
-        console.log('📍 Etapa atual no prompt:', etapaAtual.nome, '(número:', etapaAtual.numero, ')');
       }
+      promptCompleto += '---\n';
+      
+      console.log('📍 Etapa atual:', etapaAtualUnificada.nome, '(número:', etapaAtualUnificada.numero, ')');
     }
 
     if (perguntas && perguntas.length > 0) {
