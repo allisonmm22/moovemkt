@@ -2814,17 +2814,7 @@ export default function Conversas() {
                           {conversaSelecionada.agente_ia_ativo ? (
                             <>
                               <Bot className="h-4 w-4" />
-                              <span className="flex items-center gap-1.5">
-                                {conversaSelecionada.agent_ia?.nome || 'Agente IA'}
-                                {conversaSelecionada.etapa_ia && (
-                                  <>
-                                    <span className="text-primary/60">•</span>
-                                    <span className="text-xs opacity-80">
-                                      Etapa {conversaSelecionada.etapa_ia.numero}: {conversaSelecionada.etapa_ia.nome}
-                                    </span>
-                                  </>
-                                )}
-                              </span>
+                          <span>{conversaSelecionada.agent_ia?.nome || 'Agente IA'}</span>
                             </>
                           ) : (
                             <>
