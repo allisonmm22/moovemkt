@@ -77,9 +77,16 @@ serve(async (req) => {
       instanceExists = false;
     } else if (statusResult.instance?.state === 'open') {
       status = 'conectado';
-      // Tentar extrair o número do status
+      // Tentar extrair o número de vários campos possíveis
       if (statusResult.instance?.owner) {
         numero = statusResult.instance.owner.split('@')[0];
+      } else if (statusResult.instance?.wuid) {
+        numero = statusResult.instance.wuid.split('@')[0];
+      } else if (statusResult.instance?.phoneNumber) {
+        numero = statusResult.instance.phoneNumber.replace(/\D/g, '');
+      } else if (statusResult.instance?.profilePictureUrl) {
+        // Último recurso: manter número existente
+        console.log('Número não encontrado na resposta, mantendo existente');
       }
     } else if (statusResult.instance?.state === 'connecting') {
       status = 'aguardando';

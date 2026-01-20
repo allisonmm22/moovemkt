@@ -110,14 +110,27 @@ export default function Conexao() {
 
   // Auto-refresh status quando aguardando (apenas para Evolution)
   useEffect(() => {
-    const aguardando = conexoes.find(c => c.status === 'aguardando' && c.tipo_provedor !== 'meta');
-    if (aguardando && conexaoSelecionada?.id === aguardando.id) {
-      const interval = setInterval(() => {
-        handleCheckStatus(aguardando, true);
+    const aguardandoList = conexoes.filter(c => c.status === 'aguardando' && c.tipo_provedor === 'evolution');
+    if (aguardandoList.length > 0) {
+      const interval = setInterval(async () => {
+        for (const conexao of aguardandoList) {
+          try {
+            const { data } = await supabase.functions.invoke('evolution-connection-status', {
+              body: { conexao_id: conexao.id },
+            });
+            if (data?.status === 'conectado') {
+              setQrCode(null);
+              toast.success(`${conexao.nome} conectado!`);
+            }
+          } catch (error) {
+            console.error('Erro ao verificar status:', error);
+          }
+        }
+        await fetchConexoes();
       }, 5000);
       return () => clearInterval(interval);
     }
-  }, [conexoes, conexaoSelecionada]);
+  }, [conexoes, fetchConexoes]);
 
   const resetFormulario = () => {
     setInstanceName('');
