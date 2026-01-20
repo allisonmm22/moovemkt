@@ -266,9 +266,7 @@ export default function Conversas() {
   const [tagsFilter, setTagsFilter] = useState<string[]>(initialFilters.tags || []);
   const [tagsDisponiveis, setTagsDisponiveis] = useState<TagItem[]>([]);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente' | 'agente-etapa'>('choice');
-  const [agenteParaTransferir, setAgenteParaTransferir] = useState<string | null>(null);
-  const [etapasAgenteIA, setEtapasAgenteIA] = useState<any[]>([]);
+  const [transferType, setTransferType] = useState<'choice' | 'humano' | 'agente'>('choice');
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [showAttachMenu, setShowAttachMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1255,8 +1253,6 @@ export default function Conversas() {
       toast.success(data?.mensagem || (paraIA ? 'Transferido para Agente IA' : 'Atendimento transferido'));
       setShowTransferModal(false);
       setTransferType('choice');
-      setAgenteParaTransferir(null);
-      setEtapasAgenteIA([]);
       setConversaSelecionada(null);
       // OTIMIZAÇÃO: Não chamar fetchConversas - Realtime cuidará do resto
     } catch (error) {
@@ -1265,20 +1261,6 @@ export default function Conversas() {
     }
   };
 
-  // Carregar etapas do agente IA selecionado para transferência
-  useEffect(() => {
-    if (agenteParaTransferir && transferType === 'agente-etapa') {
-      const fetchEtapasAgente = async () => {
-        const { data } = await supabase
-          .from('agent_ia_etapas')
-          .select('*')
-          .eq('agent_ia_id', agenteParaTransferir)
-          .order('numero', { ascending: true });
-        setEtapasAgenteIA(data || []);
-      };
-      fetchEtapasAgente();
-    }
-  }, [agenteParaTransferir, transferType]);
 
   const handleFileSelect = (type: 'imagem' | 'documento' | 'audio') => {
     setFileType(type);
@@ -3061,14 +3043,7 @@ export default function Conversas() {
               <div className="flex items-center justify-between mb-6">
                 {transferType !== 'choice' ? (
                   <button 
-                    onClick={() => {
-                      if (transferType === 'agente-etapa') {
-                        setTransferType('agente');
-                        setAgenteParaTransferir(null);
-                      } else {
-                        setTransferType('choice');
-                      }
-                    }}
+                    onClick={() => setTransferType('choice')}
                     className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4" />
@@ -3082,13 +3057,11 @@ export default function Conversas() {
                   {transferType === 'choice' && 'Transferir Atendimento'}
                   {transferType === 'humano' && 'Atendentes Humanos'}
                   {transferType === 'agente' && 'Agentes IA'}
-                  {transferType === 'agente-etapa' && 'Selecione a Etapa'}
                 </h3>
                 
                 <button onClick={() => {
                   setShowTransferModal(false);
                   setTransferType('choice');
-                  setAgenteParaTransferir(null);
                 }}>
                   <X className="h-5 w-5 text-muted-foreground hover:text-foreground transition-colors" />
                 </button>
@@ -3175,8 +3148,9 @@ export default function Conversas() {
                         <button
                           key={agente.id}
                           onClick={() => {
-                            setAgenteParaTransferir(agente.id);
-                            setTransferType('agente-etapa');
+                            transferirAtendimento(null, true, agente.id);
+                            setShowTransferModal(false);
+                            setTransferType('choice');
                           }}
                           className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
                         >
@@ -3192,63 +3166,12 @@ export default function Conversas() {
                           {agente.tipo === 'principal' && (
                             <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded">Principal</span>
                           )}
-                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
                         </button>
                       ))
                   )}
                 </div>
               )}
 
-              {transferType === 'agente-etapa' && (
-                <div className="space-y-3 max-h-96 overflow-y-auto">
-                  <p className="text-sm text-muted-foreground">
-                    Selecione a etapa de atendimento inicial:
-                  </p>
-                  
-                  {etapasAgenteIA.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <p>Nenhuma etapa configurada para este agente</p>
-                    </div>
-                  ) : (
-                    etapasAgenteIA.map((etapa) => (
-                      <button
-                        key={etapa.id}
-                        onClick={() => {
-                          transferirAtendimento(null, true, agenteParaTransferir!, etapa.id);
-                          setShowTransferModal(false);
-                          setTransferType('choice');
-                          setAgenteParaTransferir(null);
-                        }}
-                        className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:bg-muted hover:border-primary/50 transition-all"
-                      >
-                        <span className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary font-semibold text-sm">
-                          {etapa.numero}
-                        </span>
-                        <div className="text-left flex-1">
-                          <p className="font-medium text-foreground">{etapa.nome}</p>
-                          {etapa.descricao && (
-                            <p className="text-xs text-muted-foreground truncate max-w-[250px]">
-                              {etapa.descricao.replace(/@\w+:[^\s@]+/g, '').trim().substring(0, 60)}...
-                            </p>
-                          )}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                  
-                  <button
-                    onClick={() => {
-                      transferirAtendimento(null, true, agenteParaTransferir!);
-                      setShowTransferModal(false);
-                      setTransferType('choice');
-                      setAgenteParaTransferir(null);
-                    }}
-                    className="w-full p-3 text-center text-sm text-muted-foreground border border-dashed border-border rounded-lg hover:bg-muted hover:border-primary/50 transition-all"
-                  >
-                    Começar do início (sem etapa específica)
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
