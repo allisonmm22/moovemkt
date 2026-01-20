@@ -1640,7 +1640,17 @@ serve(async (req) => {
       promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
       
       // Adicionar lista de campos personalizados disponíveis
-      if (camposPersonalizados.length > 0) {
+      // SOMENTE se o prompt/etapa contiver chips @campo explícitos
+      // Usar agente.prompt_sistema + etapaAtualGlobal para detecção
+      const promptAgenteLocal = agente?.prompt_sistema || '';
+      let descricaoEtapaLocal = '';
+      if (etapaAtualGlobal?.descricao) {
+        descricaoEtapaLocal = extractTextFromTiptapJson(etapaAtualGlobal.descricao);
+      }
+      const documentoParaDeteccao = promptAgenteLocal + '\n\n' + descricaoEtapaLocal;
+      const temChipCampoExplicito = /@campo:/i.test(documentoParaDeteccao);
+      
+      if (camposPersonalizados.length > 0 && temChipCampoExplicito) {
         promptCompleto += '\n### CAMPOS PERSONALIZADOS DISPONÍVEIS\n';
         promptCompleto += 'Você pode capturar e salvar dados nos seguintes campos:\n';
         for (const campo of camposPersonalizados) {
@@ -1649,7 +1659,7 @@ serve(async (req) => {
         }
         
         promptCompleto += '\n**COMO SALVAR CAMPOS:**\n';
-        promptCompleto += '1. Quando o lead enviar uma informação que corresponde a um campo acima, SALVE imediatamente\n';
+        promptCompleto += '1. SÓ salve campos quando o SCRIPT/ETAPA pedir explicitamente (chip @campo no prompt)\n';
         promptCompleto += '2. Use o formato: @campo:nome-do-campo:valor do lead (COM ESPAÇOS!)\n';
         promptCompleto += '3. Substitua espaços por hífens APENAS no NOME do campo (antes do segundo ":")\n';
         promptCompleto += '4. O VALOR (depois do segundo ":") deve MANTER ESPAÇOS - NÃO troque espaços por hífens no valor!\n';
@@ -1672,6 +1682,13 @@ serve(async (req) => {
         promptCompleto += '- NUNCA diga "informação salva" sem chamar a ferramenta primeiro!\n';
         promptCompleto += '- Os valores já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
         promptCompleto += '- Use @obter:<nome-do-campo> se precisar confirmar um valor antes de usar\n';
+      } else if (camposPersonalizados.length > 0) {
+        // Se há campos mas NÃO há chips @campo no prompt, adicionar regra anti-captura
+        promptCompleto += '\n### ⚠️ REGRA ANTI-CAPTURA AUTOMÁTICA\n';
+        promptCompleto += 'NÃO salve campos personalizados automaticamente!\n';
+        promptCompleto += '- Só use @campo quando o script/etapa pedir EXPLICITAMENTE\n';
+        promptCompleto += '- Não infira que deve salvar dados só porque o lead informou algo\n';
+        promptCompleto += '- Siga apenas as instruções do prompt configurado\n';
       }
       
       promptCompleto += '\n### INSTRUÇÕES DE AGENDAMENTO (CRÍTICO - SIGA EXATAMENTE)\n';
@@ -2185,63 +2202,10 @@ serve(async (req) => {
     // Padrão mais amplo: qualquer confirmação com "atualizado para" ou "registrado como"
     respostaFinal = respostaFinal.replace(/[^\n]*\s*(atualizado|registrado|salvo)\s*(para|como)\s*"[^"]+"\s*\.?\s*/gi, '').trim();
     
-    // FALLBACK REFORÇADO: Extrair ações que a IA escreveu no texto mas não chamou como tool
-    // E EXECUTAR essas ações imediatamente
-    const regexCampoConfirmacao = /📝\s*Campo\s*"([^"]+)"\s*(atualizado|registrado|salvo)\s*para\s*"([^"]+)"/gi;
-    const matchesCampo = [...result.resposta.matchAll(regexCampoConfirmacao)];
-    
-    // Também detectar padrões mais simples como "tipo do plano salvo: Coletivo"
-    const regexCampoSimples = /([a-zA-ZÀ-ú\s]+)\s*(salvo|registrado|atualizado):\s*(.+?)(?:\.|$)/gi;
-    const matchesSimples = [...result.resposta.matchAll(regexCampoSimples)];
-    
-    const acoesFallback: Acao[] = [];
-    
-    if (matchesCampo.length > 0) {
-      console.log('🔧 [FALLBACK] Detectadas confirmações de campo no texto:', matchesCampo.length);
-      
-      for (const match of matchesCampo) {
-        const nomeCampo = match[1].toLowerCase().replace(/\s+/g, '-');
-        const valorCampo = match[3];
-        
-        // Verificar se já existe ação para este campo
-        const jaExiste = result.acoes?.some(a => 
-          a.tipo === 'campo' && a.valor?.toLowerCase().startsWith(nomeCampo.toLowerCase())
-        );
-        
-        if (!jaExiste) {
-          console.log(`🔧 [FALLBACK] Ação extraída: campo:${nomeCampo}:${valorCampo}`);
-          acoesFallback.push({ tipo: 'campo', valor: `${nomeCampo}:${valorCampo}` });
-        }
-      }
-    }
-    
-    // Executar ações de fallback AGORA
-    if (acoesFallback.length > 0 && contatoId) {
-      console.log(`🔧 [FALLBACK] Executando ${acoesFallback.length} ações extraídas do texto...`);
-      
-      for (const acaoFallback of acoesFallback) {
-        try {
-          const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${supabaseKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              acao: acaoFallback,
-              conversa_id,
-              contato_id: contatoId,
-              conta_id,
-            }),
-          });
-          
-          const resultado = await response.json();
-          console.log(`✅ [FALLBACK] Ação executada:`, resultado);
-        } catch (e) {
-          console.error(`❌ [FALLBACK] Erro ao executar ação:`, e);
-        }
-      }
-    }
+    // FALLBACK DESATIVADO: Não executar ações de campo automaticamente
+    // Isso causava coleta automática mesmo quando o prompt não pedia
+    // Agora só executa ações se forem explicitamente configuradas no prompt
+    console.log('🔧 [FALLBACK] Fallback de campo DESATIVADO - somente ações explícitas do prompt são executadas');
     
     // Detectar se a resposta inteira é uma mensagem de sistema e gerar fallback
     const ehApenasMensagemSistema = /^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)/.test(result.resposta) &&
