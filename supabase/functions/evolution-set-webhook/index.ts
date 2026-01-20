@@ -69,8 +69,10 @@ serve(async (req) => {
           base64: true,
           events: [
             'MESSAGES_UPSERT',
+            'MESSAGES_UPDATE',
             'CONNECTION_UPDATE',
             'QRCODE_UPDATED',
+            'STATUS_INSTANCE',
           ],
         },
       }),
