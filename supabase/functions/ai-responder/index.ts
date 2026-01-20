@@ -99,6 +99,47 @@ function calcularCustoEstimado(
   return custoInput + custoOutput;
 }
 
+// Detectar ações com placeholders que a IA deve substituir dinamicamente
+function detectarAcoesComPlaceholders(texto: string): string[] {
+  const instrucoes: string[] = [];
+  
+  // Regex para encontrar ações com placeholders como {valor-do-lead}, {resposta}, etc.
+  const regex = /@(campo|tag|nome|etapa|negociacao):([^:\s@"]+):(\{[^}]+\})/gi;
+  const matches = [...texto.matchAll(regex)];
+  
+  for (const match of matches) {
+    const tipo = match[1];
+    const campo = match[2];
+    const placeholder = match[3];
+    
+    instrucoes.push(
+      `- Quando a instrução mencionar "@${tipo}:${campo}:${placeholder}", você DEVE substituir "${placeholder}" pelo valor REAL que o lead informou. ` +
+      `Exemplo: Se o lead disse "Bahia", use a ferramenta executar_acao com tipo="${tipo}" e valor="${campo}:Bahia". ` +
+      `NUNCA use o texto literal "${placeholder}" como valor!`
+    );
+  }
+  
+  // Também detectar formato com texto entre colchetes (ex: [📑 campo: estado:{valor-do-lead}])
+  const regexColchetes = /\[\s*[📑📝🏷️]*\s*(campo|tag|nome|etapa):?\s*([^:\s\]]+):?\s*(\{[^}]+\})\s*\]/gi;
+  const matchesColchetes = [...texto.matchAll(regexColchetes)];
+  
+  for (const match of matchesColchetes) {
+    const tipo = match[1];
+    const campo = match[2];
+    const placeholder = match[3];
+    
+    if (!instrucoes.some(i => i.includes(`@${tipo}:${campo}:${placeholder}`))) {
+      instrucoes.push(
+        `- Quando a instrução mencionar "${tipo}:${campo}:${placeholder}", você DEVE substituir "${placeholder}" pelo valor REAL que o lead informou. ` +
+        `Exemplo: Se o lead disse "São Paulo", use a ferramenta executar_acao com tipo="${tipo}" e valor="${campo}:São Paulo". ` +
+        `NUNCA use o texto literal "${placeholder}" como valor!`
+      );
+    }
+  }
+  
+  return instrucoes;
+}
+
 // Parser de ações do prompt
 function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: Acao[] } {
   const acoes: string[] = [];
@@ -123,6 +164,12 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
     const tipo = match[1].toLowerCase() as Acao['tipo'];
     const campo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
     const valor = match[3] || undefined; // Valor já vem limpo, sem aspas
+    
+    // IMPORTANTE: Ignorar ações com placeholders - a IA vai gerar dinamicamente
+    if (valor && (valor.includes('{') || valor.includes('}'))) {
+      console.log(`Ignorando ação com placeholder (aspas): ${match[0]} - IA vai substituir dinamicamente`);
+      continue;
+    }
     
     const acaoObj: Acao = {
       tipo,
@@ -156,6 +203,13 @@ function parseAcoesDoPrompt(texto: string): { acoes: string[], acoesParseadas: A
     // Remover pontuação final do valor (. , ; ! ?)
     const valorLimpo = match[2]?.replace(/[.,;!?]+$/, '') || undefined;
     const subValor = match[3]?.replace(/[.,;!?]+$/, '') || undefined;
+    
+    // IMPORTANTE: Ignorar ações com placeholders - a IA vai gerar dinamicamente
+    if ((valorLimpo && (valorLimpo.includes('{') || valorLimpo.includes('}'))) ||
+        (subValor && (subValor.includes('{') || subValor.includes('}')))) {
+      console.log(`Ignorando ação com placeholder (sem aspas): ${match[0]} - IA vai substituir dinamicamente`);
+      continue;
+    }
     
     // Para ações de agenda, combinar tipo e subvalor
     const acaoObj: Acao = {
@@ -1678,6 +1732,20 @@ serve(async (req) => {
       promptCompleto += '- Quando o lead disser seu nome, você DEVE chamar executar_acao com tipo="nome" e valor="<nome_informado>"\n';
       promptCompleto += '- Exemplo: Lead diz "Alison" ou "Me chamo Alison" → executar_acao(tipo="nome", valor="Alison")\n';
       promptCompleto += '- Se houver múltiplas ações na etapa (ex: @nome, @etapa:proposta, @transferir:agente:xxx), execute TODAS elas\n';
+    }
+
+    // Detectar placeholders dinâmicos no prompt e adicionar instruções especiais
+    const promptAgente = agente?.prompt_sistema || '';
+    const instrucoesPlaceholders = detectarAcoesComPlaceholders(promptAgente);
+    if (instrucoesPlaceholders.length > 0) {
+      promptCompleto += '\n## 🔄 SUBSTITUIÇÃO DINÂMICA DE PLACEHOLDERS\n';
+      promptCompleto += 'O prompt contém ações com placeholders (ex: {valor-do-lead}). Você DEVE substituí-los pelo valor real:\n';
+      instrucoesPlaceholders.forEach(instrucao => {
+        promptCompleto += instrucao + '\n';
+      });
+      promptCompleto += '\n**REGRA CRÍTICA:** NUNCA use o texto literal "{valor-do-lead}" ou similar como valor. ';
+      promptCompleto += 'Sempre capture a resposta REAL do lead e use-a na ação!\n';
+      promptCompleto += 'Exemplo: Lead diz "Bahia" → Use tipo="campo", valor="estado:Bahia" (NÃO valor="estado:{valor-do-lead}")\n';
     }
 
     // Adicionar restrições absolutas de escopo
