@@ -818,10 +818,23 @@ export default function CRM() {
                           onDragEnd={handleDragEnd}
                           onClick={() => handleAbrirDetalhes(negociacao)}
                           className={cn(
-                            'group relative p-3 rounded-lg bg-card border border-border cursor-pointer transition-all',
-                            'hover:border-primary/30 hover:shadow-sm',
+                            'group relative p-3 rounded-lg cursor-pointer transition-all',
                             dragging === negociacao.id && 'opacity-50 cursor-grabbing'
                           )}
+                          style={{
+                            backgroundColor: `${estagio.cor}08`,
+                            borderWidth: '1px',
+                            borderStyle: 'solid',
+                            borderColor: `${estagio.cor}25`,
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.backgroundColor = `${estagio.cor}15`;
+                            e.currentTarget.style.borderColor = `${estagio.cor}40`;
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = `${estagio.cor}08`;
+                            e.currentTarget.style.borderColor = `${estagio.cor}25`;
+                          }}
                         >
                           {/* Título */}
                           <p className="font-medium text-sm text-foreground truncate mb-1">
