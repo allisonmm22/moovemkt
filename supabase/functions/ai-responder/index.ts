@@ -1883,41 +1883,6 @@ serve(async (req) => {
     const ehSaudacao = saudacoes.some(s => mensagem.toLowerCase().trim().startsWith(s));
     const temPlaceholdersDinamicos = instrucoesPlaceholders.length > 0;
     
-    // ======= AUTO-CAPTURA DETERMINÍSTICA =======
-    // Detectar campos pendentes de captura na etapa atual (não depende da IA)
-    const regexCampoCaptura = /@campo:([a-z0-9-]+):\{[^}]+\}/gi;
-    const camposCapturaPendentes = [...descricaoEtapaTexto.matchAll(regexCampoCaptura)]
-      .map(m => m[1]);
-    
-    // Se há campos pendentes e NÃO é saudação, capturar automaticamente ANTES de chamar a IA
-    if (camposCapturaPendentes.length > 0 && !ehSaudacao && mensagem.trim().length > 0) {
-      const campoPendente = camposCapturaPendentes[0]; // Primeiro campo pendente
-      console.log(`🎯 [AUTO-CAPTURA] Campo pendente detectado: ${campoPendente}`);
-      console.log(`🎯 [AUTO-CAPTURA] Mensagem EXATA do lead: "${mensagem.trim()}"`);
-      
-      try {
-        const autoResponse = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
-          method: 'POST',
-          headers: { 
-            'Authorization': `Bearer ${supabaseKey}`, 
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify({
-            acao: { tipo: 'campo', valor: `${campoPendente}:${mensagem.trim()}` },
-            conversa_id,
-            contato_id: contatoId,
-            conta_id,
-          }),
-        });
-        
-        const autoResult = await autoResponse.json();
-        console.log(`✅ [AUTO-CAPTURA] Campo "${campoPendente}" = "${mensagem.trim()}" - Resultado:`, autoResult);
-      } catch (autoError) {
-        console.error('❌ [AUTO-CAPTURA] Erro ao salvar campo:', autoError);
-      }
-    }
-    // ======= FIM AUTO-CAPTURA =======
-    
     let forcarToolChoice = forcarFerramentaAgenda;
     if (temPlaceholdersDinamicos && !ehSaudacao && !forcarToolChoice) {
       console.log('🔧 [TOOL CHOICE] Forçando uso de ferramenta - placeholders dinâmicos detectados');
