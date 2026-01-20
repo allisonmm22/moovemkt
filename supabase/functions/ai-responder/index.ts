@@ -1809,6 +1809,7 @@ serve(async (req) => {
     promptCompleto += '- ❌ ERRADO: "Certo, Allison! Vamos lá..." (paráfrase proibida)\n';
     promptCompleto += '- ❌ ERRADO: "Olá Allison!" (resumo proibido)\n\n';
     promptCompleto += 'O texto entre aspas é a MENSAGEM EXATA que você deve enviar ao cliente. Qualquer desvio é PROIBIDO!\n';
+    promptCompleto += '**IMPORTANTE:** NÃO inclua as aspas na sua resposta! As aspas servem apenas para delimitar o script no prompt. Envie o texto SEM as aspas.\n';
     promptCompleto += 'Se o lead responder com "pode seguir", "continua", "sim", "ok" ou algo similar - siga para a próxima pergunta/ação do fluxo usando o texto literal configurado.\n';
 
     // Detectar placeholders dinâmicos no prompt e adicionar instruções especiais
@@ -2142,6 +2143,11 @@ serve(async (req) => {
     let respostaFinal = result.resposta;
     respostaFinal = respostaFinal.replace(/@(etapa|tag|transferir|notificar|finalizar|nome|negociacao|agenda|campo|obter|ir_etapa)(?::[^\s@.,!?]+(?::[^\s@.,!?]+)?)?/gi, '').trim();
     respostaFinal = respostaFinal.replace(/\s{2,}/g, ' ').trim();
+    
+    // Remover aspas literais no início e fim da resposta
+    // (modelo às vezes inclui aspas do prompt como parte da resposta)
+    respostaFinal = respostaFinal.replace(/^[""]/, '').replace(/[""]$/, '').trim();
+    respostaFinal = respostaFinal.replace(/^"/, '').replace(/"$/, '').trim();
     
     // Remover @ antes de nomes próprios na resposta (ex: @Allison -> Allison)
     respostaFinal = respostaFinal.replace(/@([A-ZÀ-Ú][a-zà-ú]+)/g, '$1');
