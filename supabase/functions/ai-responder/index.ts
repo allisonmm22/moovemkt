@@ -860,8 +860,12 @@ async function callOpenAI(
   forcarFerramentaAgenda?: boolean,
   executarVerificarClienteFn?: () => Promise<{ sucesso: boolean; mensagem: string; dados?: any }>
 ): Promise<AIResponse> {
-  const isModeloNovo = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
-                       modelo.includes('o3') || modelo.includes('o4');
+  // Modelos de REASONING (não suportam temperatura customizada - usam sempre default)
+  const isModeloReasoning = modelo.startsWith('o1') || modelo.startsWith('o3') || modelo.startsWith('o4');
+  
+  // Modelos que usam max_completion_tokens ao invés de max_tokens (formato novo de API)
+  const usaMaxCompletionTokens = modelo.includes('gpt-5') || modelo.includes('gpt-4.1') || 
+                                  modelo.startsWith('o1') || modelo.startsWith('o3') || modelo.startsWith('o4');
   
   let currentMessages: any[] = [...messages];
   let acoes: Acao[] = [];
@@ -904,18 +908,21 @@ async function callOpenAI(
       }
     }
 
-    if (!isModeloNovo) {
+    // TEMPERATURA: Aplicar para TODOS os modelos EXCETO reasoning (o1/o3/o4)
+    if (!isModeloReasoning) {
       requestBody.temperature = temperatura;
       if (iteration === 1) {
-        console.log(`🤖 Chamando modelo legado: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
+        console.log(`🤖 Modelo: ${modelo}, Temperatura: ${temperatura}, MaxTokens: ${maxTokens}`);
       }
     } else {
+      // Modelos o1/o3/o4 não suportam temperatura customizada
       if (iteration === 1) {
-        console.log(`🤖 Chamando modelo novo: ${modelo}, Temperatura: default (1), MaxTokens: ${maxTokens}`);
+        console.log(`🤖 Modelo reasoning: ${modelo}, Temperatura: fixa (não customizável), MaxTokens: ${maxTokens}`);
       }
     }
 
-    if (isModeloNovo) {
+    // MAX TOKENS: usar formato correto por modelo
+    if (usaMaxCompletionTokens) {
       requestBody.max_completion_tokens = maxTokens;
     } else {
       requestBody.max_tokens = maxTokens;
@@ -1068,11 +1075,16 @@ async function callOpenAI(
         // Sem tools para forçar resposta textual
       };
       
-      if (isModeloNovo) {
+      // Temperatura: aplicar para todos EXCETO reasoning
+      if (!isModeloReasoning) {
+        fallbackBody.temperature = temperatura;
+      }
+      
+      // Max tokens: formato correto por modelo
+      if (usaMaxCompletionTokens) {
         fallbackBody.max_completion_tokens = maxTokens;
       } else {
         fallbackBody.max_tokens = maxTokens;
-        fallbackBody.temperature = temperatura;
       }
       
       const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
