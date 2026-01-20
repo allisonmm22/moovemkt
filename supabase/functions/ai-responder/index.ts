@@ -1917,8 +1917,7 @@ serve(async (req) => {
     if (result.acoes && result.acoes.length > 0 && contatoId) {
       console.log('Executando', result.acoes.length, 'ações...');
       
-      // BLINDAGEM: Se há mais de 3 ações, provavelmente é um erro do agente
-      // Filtrar para executar apenas ações prioritárias
+      // BLINDAGEM MELHORADA: Preservar ações de CAPTURA (campo, nome) enquanto limita ações estruturais
       // IMPORTANTE: Não contar ações já executadas no tool-calling (agenda, verificar_cliente)
       const acoesJaExecutadas = ['agenda', 'verificar_cliente'];
       const acoesExecutaveis = result.acoes.filter(a => !acoesJaExecutadas.includes(a.tipo));
@@ -1927,32 +1926,51 @@ serve(async (req) => {
       console.log('📊 [AÇÕES] Total:', result.acoes.length, '| Executáveis:', acoesExecutaveis.length);
       console.log('📊 [AÇÕES] Tipos:', result.acoes.map(a => a.tipo).join(', '));
       
-      // Só aplicar blindagem se houver mais de 3 ações EXECUTÁVEIS (não conta as já processadas)
+      // Separar ações em grupos:
+      // Grupo A (SEMPRE manter - são críticas para captura de dados): campo, nome
+      // Grupo B (estruturais - limitar a 1): etapa, ir_etapa, followup, transferir, finalizar, tag, negociacao
+      const acoesCaptura = acoesExecutaveis.filter(a => ['campo', 'nome'].includes(a.tipo));
+      const acoesEstruturais = acoesExecutaveis.filter(a => !['campo', 'nome'].includes(a.tipo));
+      
+      console.log('📊 [BLINDAGEM] Captura:', acoesCaptura.length, '| Estruturais:', acoesEstruturais.length);
+      
+      // Nova lógica: SEMPRE preservar ações de captura (até 5 por segurança)
+      // Para ações estruturais, limitar a 1 (a mais prioritária)
       if (acoesExecutaveis.length > 3) {
         console.log('⚠️ [BLINDAGEM] Agente tentou executar', acoesExecutaveis.length, 'ações executáveis de uma vez!');
         console.log('Ações detectadas:', result.acoes.map(a => `${a.tipo}:${a.valor?.substring(0, 30)}`));
         
-        // Priorizar: ir_etapa > followup > agenda > transferir > finalizar
-        const prioridade = ['ir_etapa', 'followup', 'agenda', 'transferir', 'finalizar'];
-        const acaoPrioritaria = acoesExecutaveis.find(a => prioridade.includes(a.tipo));
-        
-        if (acaoPrioritaria) {
-          // Manter as ações já executadas + a prioritária
-          acoesParaExecutar = [...result.acoes.filter(a => acoesJaExecutadas.includes(a.tipo)), acaoPrioritaria];
-          console.log('✅ [BLINDAGEM] Executando ação prioritária:', acaoPrioritaria.tipo);
-        } else {
-          // Se não há ação prioritária, pegar as já executadas + a última executável
-          const ultimaExecutavel = acoesExecutaveis[acoesExecutaveis.length - 1];
-          acoesParaExecutar = [...result.acoes.filter(a => acoesJaExecutadas.includes(a.tipo)), ultimaExecutavel];
-          console.log('✅ [BLINDAGEM] Executando última ação:', ultimaExecutavel.tipo);
+        // Prioridade para ações estruturais: ir_etapa > followup > agenda > transferir > finalizar > tag
+        const prioridade = ['ir_etapa', 'etapa', 'followup', 'agenda', 'transferir', 'finalizar', 'tag', 'negociacao'];
+        let acaoEstrutural = null;
+        for (const tipo of prioridade) {
+          const encontrada = acoesEstruturais.find(a => a.tipo === tipo);
+          if (encontrada) {
+            acaoEstrutural = encontrada;
+            break;
+          }
         }
         
-        // Logar esse comportamento problemático
+        // Construir lista final: já executadas + captura (até 5) + 1 estrutural
+        const capturaLimitada = acoesCaptura.slice(0, 5);
+        acoesParaExecutar = [
+          ...result.acoes.filter(a => acoesJaExecutadas.includes(a.tipo)),
+          ...capturaLimitada,
+        ];
+        
+        if (acaoEstrutural) {
+          acoesParaExecutar.push(acaoEstrutural);
+          console.log('✅ [BLINDAGEM] Mantendo', capturaLimitada.length, 'ações de captura +', 'ação estrutural:', acaoEstrutural.tipo);
+        } else {
+          console.log('✅ [BLINDAGEM] Mantendo apenas', capturaLimitada.length, 'ações de captura (sem estrutural)');
+        }
+        
+        // Logar esse comportamento
         try {
           await supabase.from('logs_atividade').insert({
             conta_id,
-            tipo: 'erro_ia_acoes_em_lote',
-            descricao: `Agente tentou executar ${acoesExecutaveis.length} ações de uma vez`,
+            tipo: 'info_ia_acoes_filtradas',
+            descricao: `Blindagem aplicada: ${acoesCaptura.length} captura, ${acoesEstruturais.length} estruturais -> ${acoesParaExecutar.length} executadas`,
             metadata: {
               acoes_originais: result.acoes.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
               acoes_executadas: acoesParaExecutar.map(a => ({ tipo: a.tipo, valor: a.valor?.substring(0, 100) })),
@@ -1960,7 +1978,7 @@ serve(async (req) => {
             },
           });
         } catch (logError) {
-          console.error('Erro ao logar ações em lote:', logError);
+          console.error('Erro ao logar blindagem:', logError);
         }
       }
       
@@ -1977,7 +1995,7 @@ serve(async (req) => {
           continue;
         }
         
-        // 🔧 BLINDAGEM: Para ações de campo, substituir {valor-do-lead} ou valor vazio pela mensagem do lead
+        // 🔧 BLINDAGEM: Para ações de campo, substituir {valor-do-lead} ou valor vazio pela mensagem EXATA do lead
         let acaoCorrigida = { ...acao };
         if (acao.tipo === 'campo' && acao.valor) {
           const valorOriginal = acao.valor;
@@ -1987,30 +2005,23 @@ serve(async (req) => {
           
           // Detectar se é placeholder ou valor vazio
           const ehPlaceholder = valorCampo === '{valor-do-lead}' || 
+                                valorCampo === '{resposta-do-lead}' ||
+                                valorCampo === '{resposta}' ||
                                 valorCampo.startsWith('{') ||
                                 valorCampo === '' ||
                                 !valorCampo;
           
           if (ehPlaceholder) {
             console.log(`🔧 [BLINDAGEM CAMPO] Detectado placeholder/vazio em ação campo: "${valorOriginal}"`);
-            console.log(`🔧 [BLINDAGEM CAMPO] Mensagem do lead para usar: "${mensagem}"`);
+            console.log(`🔧 [BLINDAGEM CAMPO] Mensagem EXATA do lead: "${mensagem}"`);
             
-            // Usar a mensagem do lead como valor
-            let valorReal = mensagem.trim();
+            // IMPORTANTE: Usar a mensagem do lead EXATAMENTE como veio, sem extrações "inteligentes"
+            // Apenas trim para remover espaços em branco nas pontas
+            const valorReal = mensagem.trim();
             
-            // Se o campo for email, tentar extrair apenas o email da mensagem
-            if (nomeCampo.toLowerCase().includes('email')) {
-              const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-              const emailMatch = mensagem.match(emailRegex);
-              if (emailMatch) {
-                valorReal = emailMatch[0];
-                console.log(`📧 [BLINDAGEM CAMPO] Email extraído: "${valorReal}"`);
-              }
-            }
-            
-            // Atualizar a ação com o valor real
+            // Atualizar a ação com o valor real (sem filtrar NADA)
             acaoCorrigida.valor = `${nomeCampo}:${valorReal}`;
-            console.log(`✅ [BLINDAGEM CAMPO] Valor corrigido para: "${acaoCorrigida.valor}"`);
+            console.log(`✅ [BLINDAGEM CAMPO] Valor salvo EXATAMENTE: "${acaoCorrigida.valor}"`);
           }
         }
         
@@ -2081,25 +2092,60 @@ serve(async (req) => {
     // Padrão mais amplo: qualquer confirmação com "atualizado para" ou "registrado como"
     respostaFinal = respostaFinal.replace(/[^\n]*\s*(atualizado|registrado|salvo)\s*(para|como)\s*"[^"]+"\s*\.?\s*/gi, '').trim();
     
-    // FALLBACK: Extrair ações que a IA escreveu no texto mas não chamou como tool
+    // FALLBACK REFORÇADO: Extrair ações que a IA escreveu no texto mas não chamou como tool
+    // E EXECUTAR essas ações imediatamente
     const regexCampoConfirmacao = /📝\s*Campo\s*"([^"]+)"\s*(atualizado|registrado|salvo)\s*para\s*"([^"]+)"/gi;
     const matchesCampo = [...result.resposta.matchAll(regexCampoConfirmacao)];
     
-    if (matchesCampo.length > 0 && result.acoes) {
-      console.log('🔧 [FALLBACK] Detectadas confirmações de campo no texto, verificando se foram executadas...');
+    // Também detectar padrões mais simples como "tipo do plano salvo: Coletivo"
+    const regexCampoSimples = /([a-zA-ZÀ-ú\s]+)\s*(salvo|registrado|atualizado):\s*(.+?)(?:\.|$)/gi;
+    const matchesSimples = [...result.resposta.matchAll(regexCampoSimples)];
+    
+    const acoesFallback: Acao[] = [];
+    
+    if (matchesCampo.length > 0) {
+      console.log('🔧 [FALLBACK] Detectadas confirmações de campo no texto:', matchesCampo.length);
       
       for (const match of matchesCampo) {
         const nomeCampo = match[1].toLowerCase().replace(/\s+/g, '-');
         const valorCampo = match[3];
         
         // Verificar se já existe ação para este campo
-        const jaExiste = result.acoes.some(a => 
+        const jaExiste = result.acoes?.some(a => 
           a.tipo === 'campo' && a.valor?.toLowerCase().startsWith(nomeCampo.toLowerCase())
         );
         
         if (!jaExiste) {
-          console.log(`🔧 [FALLBACK] Adicionando ação extraída do texto: campo:${nomeCampo}:${valorCampo}`);
-          result.acoes.push({ tipo: 'campo', valor: `${nomeCampo}:${valorCampo}` });
+          console.log(`🔧 [FALLBACK] Ação extraída: campo:${nomeCampo}:${valorCampo}`);
+          acoesFallback.push({ tipo: 'campo', valor: `${nomeCampo}:${valorCampo}` });
+        }
+      }
+    }
+    
+    // Executar ações de fallback AGORA
+    if (acoesFallback.length > 0 && contatoId) {
+      console.log(`🔧 [FALLBACK] Executando ${acoesFallback.length} ações extraídas do texto...`);
+      
+      for (const acaoFallback of acoesFallback) {
+        try {
+          const response = await fetch(`${supabaseUrl}/functions/v1/executar-acao`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              acao: acaoFallback,
+              conversa_id,
+              contato_id: contatoId,
+              conta_id,
+            }),
+          });
+          
+          const resultado = await response.json();
+          console.log(`✅ [FALLBACK] Ação executada:`, resultado);
+        } catch (e) {
+          console.error(`❌ [FALLBACK] Erro ao executar ação:`, e);
         }
       }
     }
