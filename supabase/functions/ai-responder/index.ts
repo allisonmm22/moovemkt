@@ -1640,22 +1640,46 @@ serve(async (req) => {
       promptCompleto += '- @agenda:criar:<titulo>|<data_inicio> - Criar evento no calendário com Google Meet (datas em ISO8601)\n';
       
       // Adicionar lista de campos personalizados disponíveis
-      // SOMENTE se o prompt/etapa contiver chips @campo explícitos
-      // Usar agente.prompt_sistema + etapaAtualGlobal para detecção
+      // SOMENTE listar os campos que têm chips @campo:nome-do-campo explícitos no prompt
       const promptAgenteLocal = agente?.prompt_sistema || '';
       let descricaoEtapaLocal = '';
       if (etapaAtualGlobal?.descricao) {
         descricaoEtapaLocal = extractTextFromTiptapJson(etapaAtualGlobal.descricao);
       }
       const documentoParaDeteccao = promptAgenteLocal + '\n\n' + descricaoEtapaLocal;
-      const temChipCampoExplicito = /@campo:/i.test(documentoParaDeteccao);
+      
+      // 🆕 Extrair quais campos ESPECÍFICOS estão configurados no prompt (ex: @campo:estado, @campo:nome-completo)
+      const camposConfiguradosLocal = new Set<string>();
+      const regexCampos = /@campo:([a-zA-Z0-9\-_]+)/gi;
+      let matchCampo;
+      while ((matchCampo = regexCampos.exec(documentoParaDeteccao)) !== null) {
+        camposConfiguradosLocal.add(matchCampo[1].toLowerCase());
+      }
+      console.log('📋 [CAMPOS] Campos específicos configurados no prompt:', Array.from(camposConfiguradosLocal));
+      
+      const temChipCampoExplicito = camposConfiguradosLocal.size > 0;
       
       if (camposPersonalizados.length > 0 && temChipCampoExplicito) {
-        promptCompleto += '\n### CAMPOS PERSONALIZADOS DISPONÍVEIS\n';
-        promptCompleto += 'Você pode capturar e salvar dados nos seguintes campos:\n';
+        promptCompleto += '\n### CAMPOS PERSONALIZADOS PERMITIDOS\n';
+        promptCompleto += 'Você pode SOMENTE capturar dados nos seguintes campos (configurados na etapa):\n';
+        
+        // 🆕 FILTRAR: Só listar campos que estão no prompt
+        let camposListados = 0;
         for (const campo of camposPersonalizados) {
           const nomeCampoFormatado = campo.nome.toLowerCase().replace(/\s+/g, '-');
-          promptCompleto += `- ${campo.nome} (${campo.tipo}) → Use: @campo:${nomeCampoFormatado}:{valor-do-lead}\n`;
+          // Só incluir se este campo específico está configurado
+          if (camposConfiguradosLocal.has(nomeCampoFormatado)) {
+            promptCompleto += `- ${campo.nome} (${campo.tipo}) → Use: @campo:${nomeCampoFormatado}:{valor-do-lead}\n`;
+            camposListados++;
+          }
+        }
+        
+        // Se não encontrou correspondência exata, listar os configurados mesmo assim
+        if (camposListados === 0) {
+          console.log('⚠️ [CAMPOS] Nenhum campo do banco correspondeu aos configurados. Chips no prompt:', Array.from(camposConfiguradosLocal));
+          for (const nomeCampo of camposConfiguradosLocal) {
+            promptCompleto += `- ${nomeCampo} → Use: @campo:${nomeCampo}:{valor-do-lead}\n`;
+          }
         }
         
         promptCompleto += '\n**COMO SALVAR CAMPOS:**\n';
@@ -1676,12 +1700,16 @@ serve(async (req) => {
         promptCompleto += '- Lead diz: "123.456.789-00"\n';
         promptCompleto += '  → Você usa: @campo:cpf:123.456.789-00\n\n';
         
-        promptCompleto += '**⚠️ REGRA CRÍTICA:**\n';
+        promptCompleto += '\n**⚠️ REGRAS CRÍTICAS:**\n';
         promptCompleto += '- Para salvar um campo, você DEVE usar a ferramenta executar_acao com tipo="campo"\n';
         promptCompleto += '- O valor deve ser: "nome-do-campo:valor-que-o-lead-enviou"\n';
         promptCompleto += '- NUNCA diga "informação salva" sem chamar a ferramenta primeiro!\n';
         promptCompleto += '- Os valores já salvos aparecem na seção DADOS DO CONTATO/LEAD acima\n';
         promptCompleto += '- Use @obter:<nome-do-campo> se precisar confirmar um valor antes de usar\n';
+        promptCompleto += '\n**🚫 PROIBIDO:**\n';
+        promptCompleto += '- NÃO salve campos que NÃO estão listados acima\n';
+        promptCompleto += '- NÃO invente campos novos\n';
+        promptCompleto += '- Se o lead informar algo que não tem campo configurado, apenas siga a conversa SEM salvar\n';
       } else if (camposPersonalizados.length > 0) {
         // Se há campos mas NÃO há chips @campo no prompt, adicionar regra anti-captura
         promptCompleto += '\n### ⚠️ REGRA ANTI-CAPTURA AUTOMÁTICA\n';
@@ -2028,7 +2056,22 @@ serve(async (req) => {
       const documentoFiltro = (promptAgenteFiltro + '\n' + descricaoEtapaFiltro).toLowerCase();
       
       // Mapear quais ações estão permitidas pelo prompt
-      const acoesPermitidas = new Set<string>(['nome', 'campo']); // Sempre permitir captura básica
+      const acoesPermitidas = new Set<string>(['nome']); // Sempre permitir captura de nome
+      
+      // 🆕 Extrair quais campos ESPECÍFICOS estão configurados no prompt
+      const camposConfiguradosFiltro = new Set<string>();
+      const regexCamposFiltro = /@campo:([a-zA-Z0-9\-_]+)/gi;
+      let matchCampoFiltro;
+      while ((matchCampoFiltro = regexCamposFiltro.exec(documentoFiltro)) !== null) {
+        camposConfiguradosFiltro.add(matchCampoFiltro[1].toLowerCase());
+      }
+      
+      // Se há pelo menos um campo configurado, permitir ação 'campo' (será filtrada por nome específico abaixo)
+      if (camposConfiguradosFiltro.size > 0) {
+        acoesPermitidas.add('campo');
+      }
+      
+      console.log('📋 [FILTRO] Campos específicos permitidos:', Array.from(camposConfiguradosFiltro));
       
       if (documentoFiltro.includes('@negociacao') || documentoFiltro.includes('@negociaçao')) {
         acoesPermitidas.add('negociacao');
@@ -2060,6 +2103,22 @@ serve(async (req) => {
       const acoesFiltradas = result.acoes.filter(a => {
         // Ações de agenda/verificar são sempre permitidas (executadas no tool-calling)
         if (['agenda', 'verificar_cliente'].includes(a.tipo)) return true;
+        
+        // 🆕 FILTRO ESPECÍFICO PARA CAMPOS: verificar se o campo específico está configurado
+        if (a.tipo === 'campo') {
+          // Extrair nome do campo da ação (ex: "estado:Bahia" -> "estado")
+          const nomeCampoAcao = a.valor?.split(':')[0]?.toLowerCase().trim();
+          if (!nomeCampoAcao) {
+            console.log('⚠️ [FILTRO] Campo sem nome válido, descartando:', a.valor);
+            return false;
+          }
+          if (!camposConfiguradosFiltro.has(nomeCampoAcao)) {
+            console.log('⚠️ [FILTRO] Campo não configurado no prompt, descartando:', nomeCampoAcao, '| Configurados:', Array.from(camposConfiguradosFiltro));
+            return false;
+          }
+          return true;
+        }
+        
         // Verificar se a ação está permitida
         return acoesPermitidas.has(a.tipo);
       });
