@@ -1648,6 +1648,10 @@ serve(async (req) => {
       promptCompleto += '- Após salvar um campo, faça a próxima pergunta ou agradeça e continue normalmente\n';
       promptCompleto += '- Exemplo correto: "Obrigado! E qual é a sua data de nascimento?" (não menciona que salvou email)\n';
       promptCompleto += '- Exemplo ERRADO: "📝 Campo email atualizado para x@y.com" (NUNCA faça isso!)\n';
+      promptCompleto += '- Exemplo ERRADO: "📝 Estado registrado: SP" (NUNCA mencione que registrou!)\n';
+      promptCompleto += '- Exemplo ERRADO: "Email registrado: x@y.com. Agora..." (NUNCA confirme registro!)\n';
+      promptCompleto += '- Exemplo ERRADO: "Ótimo, telefone salvo! Qual seu email?" (NÃO confirme ações!)\n';
+      promptCompleto += '- Exemplo ERRADO: Iniciar resposta com emoji 📝 ou qualquer confirmação de sistema\n';
       
       promptCompleto += '\n## ⚠️ REGRA CRÍTICA: UMA AÇÃO POR RESPOSTA\n';
       promptCompleto += 'Você deve executar NO MÁXIMO UMA ou DUAS ações por resposta!\n\n';
@@ -1982,10 +1986,22 @@ serve(async (req) => {
     respostaFinal = respostaFinal.replace(/^Informação\s*(salva|registrada|atualizada)\.?\s*/gi, '').trim();
     respostaFinal = respostaFinal.replace(/^(Registro|Dados?)\s*(salvos?|atualizados?|registrados?)\.?\s*/gi, '').trim();
     
+    // Novos filtros para padrões "registrado:", "salvo:", etc.
+    // Padrão: "📝 Estado registrado: Bahia (BA)" ou "Email registrado: test@email.com"
+    respostaFinal = respostaFinal.replace(/^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)?\s*\w+\s+(registrado|salvo|atualizado|gravado|armazenado):\s*[^\n]+\s*/gi, '').trim();
+    
+    // Padrão mais genérico: começa com emoji + qualquer "X registrado/salvo"
+    respostaFinal = respostaFinal.replace(/^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)\s*[^.!?]+\s*(registrado|salvo|atualizado|gravado)[^.!?]*[.!?]?\s*/gi, '').trim();
+    
+    // Padrão: "Perfeito, estado registrado!" ou similar no início
+    respostaFinal = respostaFinal.replace(/^(Perfeito|Ótimo|Certo|OK|Entendi|Anotado)[,!.]?\s*[^.!?]*\s*(registrado|salvo|atualizado|gravado)[^.!?]*[.!?]?\s*/gi, '').trim();
+    
     // Detectar se a resposta inteira é uma mensagem de sistema e gerar fallback
     const ehApenasMensagemSistema = /^(📝|📊|🏷️|✏️|💼|📅|🔍|⚙️|🔒|👤|🤖|↔️|🔔)/.test(result.resposta) &&
                                     (result.resposta.includes('atualizado para') ||
                                      result.resposta.includes('atualizado:') ||
+                                     result.resposta.includes('registrado:') ||
+                                     result.resposta.includes('salvo:') ||
                                      result.resposta.includes('Campo "') ||
                                      result.resposta.includes('executada'));
     
