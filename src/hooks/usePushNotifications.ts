@@ -65,24 +65,15 @@ export const usePushNotifications = () => {
     checkSupport();
   }, [usuario]);
 
-  // Registrar Service Worker de push
-  const registerServiceWorker = useCallback(async () => {
+  // Usar o Service Worker já registrado pelo VitePWA
+  const getServiceWorkerRegistration = useCallback(async () => {
     try {
-      // Verificar se já existe
-      const existingReg = await navigator.serviceWorker.getRegistration('/sw-push.js');
-      if (existingReg) {
-        return existingReg;
-      }
-
-      // Registrar novo
-      const registration = await navigator.serviceWorker.register('/sw-push.js', {
-        scope: '/'
-      });
-
-      await registration.update();
+      // Aguarda o SW do VitePWA estar pronto (não registra um novo!)
+      const registration = await navigator.serviceWorker.ready;
+      console.log('[Push] Usando SW existente:', registration.scope);
       return registration;
     } catch (error) {
-      console.error('Erro ao registrar SW:', error);
+      console.error('[Push] Erro ao obter SW:', error);
       throw error;
     }
   }, []);
@@ -120,12 +111,12 @@ export const usePushNotifications = () => {
         return false;
       }
 
-      // Registrar SW
-      const registration = await registerServiceWorker();
-      await navigator.serviceWorker.ready;
+      // Usar o SW já registrado pelo VitePWA
+      const registration = await getServiceWorkerRegistration();
 
-      // Criar subscription
+      // Criar subscription usando o SW do VitePWA
       const vapidKeyArray = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      console.log('[Push] Criando subscription...');
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: new Uint8Array(vapidKeyArray) as BufferSource,
@@ -159,14 +150,14 @@ export const usePushNotifications = () => {
         permission: 'granted' 
       }));
       
-      console.log('Push subscription criada com sucesso!');
+      console.log('[Push] Subscription criada com sucesso!');
       return true;
     } catch (error) {
-      console.error('Erro ao criar subscription:', error);
+      console.error('[Push] Erro ao criar subscription:', error);
       setState(prev => ({ ...prev, isLoading: false }));
       return false;
     }
-  }, [usuario, registerServiceWorker]);
+  }, [usuario, getServiceWorkerRegistration]);
 
   // Cancelar subscription
   const unsubscribe = useCallback(async (): Promise<boolean> => {
