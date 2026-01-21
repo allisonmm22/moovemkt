@@ -1293,6 +1293,42 @@ serve(async (req) => {
 
       console.log('Conversa atualizada com sucesso');
 
+      // ENVIAR PUSH NOTIFICATION (apenas para mensagens de entrada quando IA está desativada)
+      // Isso notifica atendentes humanos de novas mensagens
+      if (!fromMe && !agenteIaAtivoFinal) {
+        console.log('=== ENVIANDO PUSH NOTIFICATION ===');
+        try {
+          // Buscar nome do contato para a notificação
+          const contatoNome = (contato as any)?.nome || telefone;
+          
+          // Enviar push para todos os usuários da conta
+          await fetch(
+            `${supabaseUrl}/functions/v1/send-push-notification`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseKey}`,
+              },
+              body: JSON.stringify({
+                conta_id: conexao.conta_id,
+                title: `Nova mensagem de ${contatoNome}`,
+                body: messageContent.substring(0, 100) + (messageContent.length > 100 ? '...' : ''),
+                url: `/conversas?id=${conversa!.id}`,
+                data: {
+                  conversa_id: conversa!.id,
+                  contato_id: contato!.id,
+                },
+              }),
+            }
+          );
+          console.log('Push notification enviado');
+        } catch (pushError) {
+          console.error('Erro ao enviar push notification:', pushError);
+          // Não falhar o webhook por causa de erro no push
+        }
+      }
+
       // Sistema de debounce: agendar resposta com tempo_espera_segundos
       // IMPORTANTE: Nunca agendar resposta IA para grupos
       // Usar agenteIaAtivoFinal para considerar reativação em conversas reabertas
