@@ -53,27 +53,49 @@ function gerarMensagemSistema(tipo: string, valor: string | undefined, resultado
     case 'verificar_cliente':
       return `🔍 Status de cliente verificado no CRM`;
     case 'followup': {
-      // Extrair data e motivo do valor
-      const partes = valor?.split(':') || [];
-      // Formato: data_iso:motivo (motivo pode conter ":")
-      if (partes.length >= 2) {
-        try {
-          // Reconstruir a data ISO (que pode ter ":" dentro)
-          const dataStr = partes.slice(0, 3).join(':'); // 2025-01-10T14:00:00
-          const motivo = partes.slice(3).join(':') || 'retorno agendado';
-          const data = new Date(dataStr);
-          const dataFormatada = data.toLocaleString('pt-BR', { 
-            day: '2-digit', 
-            month: '2-digit', 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          });
-          return `📅 Follow-up agendado para ${dataFormatada} - ${motivo}`;
-        } catch {
-          return `📅 Follow-up agendado: ${valor}`;
-        }
+      const valorCompleto = valor || '';
+      let dataFormatada = '';
+      let motivo = 'retorno agendado';
+      
+      // Tentar diferentes formatos de data/hora (mesma lógica do case principal)
+      const matchComTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2}):?(.*)$/);
+      const matchSemTz = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}):?(.*)$/);
+      const matchDataSimples = valorCompleto.match(/^(\d{4}-\d{2}-\d{2}):?(.*)$/);
+      const matchHorario = valorCompleto.match(/^(\d{1,2})[h:](\d{2}):?(.*)$/i);
+      const matchHorarioSimples = valorCompleto.match(/^(\d{1,2})h?(\d{2})?/i);
+      
+      if (matchComTz) {
+        const data = new Date(matchComTz[1]);
+        dataFormatada = data.toLocaleString('pt-BR', { 
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+        });
+        motivo = matchComTz[2]?.trim() || motivo;
+      } else if (matchSemTz) {
+        const data = new Date(matchSemTz[1]);
+        dataFormatada = data.toLocaleString('pt-BR', { 
+          day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+        });
+        motivo = matchSemTz[2]?.trim() || motivo;
+      } else if (matchDataSimples) {
+        const data = new Date(matchDataSimples[1]);
+        dataFormatada = data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        motivo = matchDataSimples[2]?.trim() || motivo;
+      } else if (matchHorario) {
+        dataFormatada = `${matchHorario[1].padStart(2, '0')}:${matchHorario[2]}`;
+        motivo = matchHorario[3]?.trim() || motivo;
+      } else if (matchHorarioSimples) {
+        const hora = matchHorarioSimples[1].padStart(2, '0');
+        const min = matchHorarioSimples[2] || '00';
+        dataFormatada = `${hora}:${min}`;
+        // Extrair motivo do resto do valor
+        const restoValor = valorCompleto.replace(matchHorarioSimples[0], '').replace(/^:/, '').trim();
+        if (restoValor) motivo = restoValor;
+      } else {
+        // Fallback: usar valor como está
+        dataFormatada = valorCompleto;
       }
-      return `📅 Follow-up agendado`;
+      
+      return `📅 Follow-up agendado para ${dataFormatada} - ${motivo}`;
     }
     default:
       return `⚙️ Ação executada: ${tipo}`;

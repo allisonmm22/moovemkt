@@ -1804,6 +1804,16 @@ serve(async (req) => {
       promptCompleto += '- NUNCA consulte disponibilidade (@agenda:consultar) para follow-ups!\n';
       promptCompleto += '- Follow-up NÃO precisa consultar calendário - é apenas um lembrete!\n';
       
+      promptCompleto += '\n**EXCEÇÃO IMPORTANTE - CONFIRMAR FOLLOW-UP AO LEAD:**\n';
+      promptCompleto += '- Diferente de outras ações, quando você agenda um follow-up você DEVE responder ao lead naturalmente\n';
+      promptCompleto += '- Após agendar o follow-up, sempre confirme ao lead que você vai retornar no horário combinado\n';
+      promptCompleto += '- Exemplos de respostas CORRETAS após agendar follow-up:\n';
+      promptCompleto += '  - "Perfeito! Vou te retornar às 22:30 então. Até mais!"\n';
+      promptCompleto += '  - "Combinado! Te mando mensagem às 22:30. Tenha um bom dia!"\n';
+      promptCompleto += '  - "Anotado! Retorno às 22:30. Até lá!"\n';
+      promptCompleto += '- NÃO diga apenas "Follow-up agendado" - seja natural e amigável\n';
+      promptCompleto += '- Esta é a ÚNICA ação onde você deve confirmar ao lead o que foi combinado\n';
+      
       promptCompleto += '\nQuando identificar que uma ação deve ser executada baseado no contexto da conversa, use a ferramenta executar_acao.\n';
       promptCompleto += '\n## REGRAS IMPORTANTES\n';
       promptCompleto += '- NUNCA mencione ao cliente que está executando ações internas como transferências, mudanças de etapa, tags, etc.\n';
