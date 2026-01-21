@@ -2069,7 +2069,7 @@ serve(async (req) => {
       const documentoFiltro = (promptAgenteFiltro + '\n' + descricaoEtapaFiltro).toLowerCase();
       
       // Mapear quais ações estão permitidas pelo prompt
-      const acoesPermitidas = new Set<string>(['nome']); // Sempre permitir captura de nome
+      const acoesPermitidas = new Set<string>(['nome', 'followup']); // Sempre permitir captura de nome e follow-up
       
       // 🆕 Extrair quais campos ESPECÍFICOS estão configurados no prompt
       const camposConfiguradosFiltro = new Set<string>();
