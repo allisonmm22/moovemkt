@@ -1293,16 +1293,24 @@ serve(async (req) => {
 
       console.log('Conversa atualizada com sucesso');
 
-      // ENVIAR PUSH NOTIFICATION (apenas para mensagens de entrada quando IA está desativada)
-      // Isso notifica atendentes humanos de novas mensagens
-      if (!fromMe && !agenteIaAtivoFinal) {
-        console.log('=== ENVIANDO PUSH NOTIFICATION ===');
+      // ENVIAR PUSH NOTIFICATION para TODAS as mensagens recebidas
+      // Envia para o atendente responsável (se houver) ou para toda a conta
+      if (!fromMe && !isGrupo) {
+        console.log('=== PUSH: Processando notificação ===');
+        
+        // Buscar atendente_id da conversa
+        const atendenteId = (conversa as any)?.atendente_id;
+        
+        if (atendenteId) {
+          console.log('PUSH: Enviando para atendente:', atendenteId);
+        } else {
+          console.log('PUSH: Sem atendente, enviando para toda a conta');
+        }
+        
         try {
-          // Buscar nome do contato para a notificação
           const contatoNome = (contato as any)?.nome || telefone;
           
-          // Enviar push para todos os usuários da conta
-          await fetch(
+          const pushResponse = await fetch(
             `${supabaseUrl}/functions/v1/send-push-notification`,
             {
               method: 'POST',
@@ -1311,7 +1319,11 @@ serve(async (req) => {
                 'Authorization': `Bearer ${supabaseKey}`,
               },
               body: JSON.stringify({
-                conta_id: conexao.conta_id,
+                // Se tem atendente, envia só para ele; senão, envia para toda conta
+                ...(atendenteId 
+                  ? { usuario_id: atendenteId }
+                  : { conta_id: conexao.conta_id }
+                ),
                 title: `Nova mensagem de ${contatoNome}`,
                 body: messageContent.substring(0, 100) + (messageContent.length > 100 ? '...' : ''),
                 url: `/conversas?id=${conversa!.id}`,
@@ -1322,10 +1334,9 @@ serve(async (req) => {
               }),
             }
           );
-          console.log('Push notification enviado');
+          console.log('PUSH: Resposta status:', pushResponse.status);
         } catch (pushError) {
-          console.error('Erro ao enviar push notification:', pushError);
-          // Não falhar o webhook por causa de erro no push
+          console.error('PUSH: Erro ao enviar:', pushError);
         }
       }
 
