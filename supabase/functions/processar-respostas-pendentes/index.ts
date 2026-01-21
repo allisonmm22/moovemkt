@@ -177,15 +177,31 @@ serve(async (req) => {
                   enviada_por_ia: true,
                 });
 
+                // Buscar status atualizado (pode ter sido alterado por @finalizar)
+                const { data: conversaAtualizada } = await supabase
+                  .from('conversas')
+                  .select('status')
+                  .eq('id', conversa.id)
+                  .single();
+
+                // Só atualizar status se NÃO foi encerrada pela ação @finalizar
+                const novoStatus = conversaAtualizada?.status === 'encerrado' 
+                  ? 'encerrado' 
+                  : 'aguardando_cliente';
+
                 // Atualizar conversa
                 await supabase
                   .from('conversas')
                   .update({
                     ultima_mensagem: aiData.resposta,
                     ultima_mensagem_at: new Date().toISOString(),
-                    status: 'aguardando_cliente',
+                    status: novoStatus,
                   })
                   .eq('id', conversa.id);
+
+                if (novoStatus === 'encerrado') {
+                  console.log(`[processar-respostas-pendentes] Status mantido como encerrado (ação @finalizar detectada)`);
+                }
 
                 processados++;
               } else {
