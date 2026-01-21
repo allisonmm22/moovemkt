@@ -1943,6 +1943,42 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          auth: string
+          conta_id: string
+          created_at: string | null
+          endpoint: string
+          id: string
+          p256dh: string
+          updated_at: string | null
+          user_agent: string | null
+          usuario_id: string
+        }
+        Insert: {
+          auth: string
+          conta_id: string
+          created_at?: string | null
+          endpoint: string
+          id?: string
+          p256dh: string
+          updated_at?: string | null
+          user_agent?: string | null
+          usuario_id: string
+        }
+        Update: {
+          auth?: string
+          conta_id?: string
+          created_at?: string | null
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          updated_at?: string | null
+          user_agent?: string | null
+          usuario_id?: string
+        }
+        Relationships: []
+      }
       respostas_pendentes: {
         Row: {
           conversa_id: string
