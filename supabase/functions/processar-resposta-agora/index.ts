@@ -9,6 +9,7 @@ const corsHeaders = {
 const EVOLUTION_API_URL = 'https://evolution.cognityx.com.br';
 
 // Função para dividir mensagem de forma inteligente
+// Hierarquia: parágrafos → frases (. ! ?) → pontuação média (, ; :) → palavras
 function dividirMensagem(texto: string, tamanhoMax: number): string[] {
   if (texto.length <= tamanhoMax) {
     return [texto];
@@ -17,6 +18,49 @@ function dividirMensagem(texto: string, tamanhoMax: number): string[] {
   const fracoes: string[] = [];
   const paragrafos = texto.split(/\n\n+/);
   let fracaoAtual = '';
+
+  // Função auxiliar para dividir por palavras (último recurso)
+  const dividirPorPalavras = (segmento: string): void => {
+    const palavras = segmento.split(/\s+/);
+    for (const palavra of palavras) {
+      if (fracaoAtual.length + palavra.length + 1 <= tamanhoMax) {
+        fracaoAtual = fracaoAtual ? `${fracaoAtual} ${palavra}` : palavra;
+      } else {
+        if (fracaoAtual) {
+          fracoes.push(fracaoAtual.trim());
+        }
+        fracaoAtual = palavra;
+      }
+    }
+  };
+
+  // Função auxiliar para dividir por pontuação média (, ; :)
+  const dividirPorPontuacaoMedia = (frase: string): void => {
+    const segmentos = frase.split(/(?<=[,;:])\s+/);
+    
+    // Se não conseguiu dividir por pontuação média, vai direto para palavras
+    if (segmentos.length === 1) {
+      dividirPorPalavras(frase);
+      return;
+    }
+
+    for (const segmento of segmentos) {
+      if (fracaoAtual.length + segmento.length + 1 <= tamanhoMax) {
+        fracaoAtual = fracaoAtual ? `${fracaoAtual} ${segmento}` : segmento;
+      } else {
+        if (fracaoAtual) {
+          fracoes.push(fracaoAtual.trim());
+        }
+        // Se o segmento ainda é maior que o max, divide por palavras
+        if (segmento.length > tamanhoMax) {
+          fracaoAtual = '';
+          dividirPorPalavras(segmento);
+        } else {
+          fracaoAtual = segmento;
+        }
+      }
+    }
+  };
 
   for (const paragrafo of paragrafos) {
     // Se o parágrafo cabe na fração atual
@@ -40,20 +84,10 @@ function dividirMensagem(texto: string, tamanhoMax: number): string[] {
             if (fracaoAtual) {
               fracoes.push(fracaoAtual.trim());
             }
-            // Se a frase sozinha é maior que o max, divide por palavras
+            // Se a frase sozinha é maior que o max, tenta por pontuação média
             if (frase.length > tamanhoMax) {
-              const palavras = frase.split(/\s+/);
               fracaoAtual = '';
-              for (const palavra of palavras) {
-                if (fracaoAtual.length + palavra.length + 1 <= tamanhoMax) {
-                  fracaoAtual = fracaoAtual ? `${fracaoAtual} ${palavra}` : palavra;
-                } else {
-                  if (fracaoAtual) {
-                    fracoes.push(fracaoAtual.trim());
-                  }
-                  fracaoAtual = palavra;
-                }
-              }
+              dividirPorPontuacaoMedia(frase);
             } else {
               fracaoAtual = frase;
             }
