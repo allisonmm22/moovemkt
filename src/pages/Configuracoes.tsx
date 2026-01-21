@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Building, Save, Loader2, Bell, Volume2 } from 'lucide-react';
+import { Building, Save, Loader2, Bell, Volume2, Smartphone } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { useNotificationPreferences } from '@/hooks/useNotificationPreferences';
 import { requestNotificationPermission } from '@/lib/notificationSound';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 export default function Configuracoes() {
   const { usuario } = useAuth();
@@ -23,6 +24,12 @@ export default function Configuracoes() {
     setBrowserEnabled 
   } = useNotificationPreferences();
 
+  const {
+    isSupported: pushSupported,
+    isSubscribed: pushSubscribed,
+    isLoading: pushLoading,
+    toggleSubscription: togglePush,
+  } = usePushNotifications();
   useEffect(() => {
     if (usuario) {
       fetchConta();
@@ -143,6 +150,39 @@ export default function Configuracoes() {
                 />
               </button>
             </div>
+
+            {/* Push PWA */}
+            {pushSupported && (
+              <div className="flex items-center justify-between gap-3 p-3 md:p-4 rounded-lg bg-muted/50 border border-border">
+                <div className="flex items-center gap-3 min-w-0">
+                  <Smartphone className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-foreground text-sm md:text-base">Push Notification (PWA)</p>
+                    <p className="text-xs md:text-sm text-muted-foreground truncate">Receber notificações mesmo com app fechado</p>
+                  </div>
+                </div>
+                <button
+                  onClick={async () => {
+                    const success = await togglePush();
+                    if (success) {
+                      toast.success(pushSubscribed ? 'Push desativado' : 'Push ativado!');
+                    } else {
+                      toast.error('Erro ao configurar push');
+                    }
+                  }}
+                  disabled={pushLoading}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors flex-shrink-0 ${
+                    pushSubscribed ? 'bg-primary' : 'bg-muted-foreground/30'
+                  } ${pushLoading ? 'opacity-50' : ''}`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      pushSubscribed ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            )}
           </div>
 
           <p className="text-xs text-muted-foreground">
