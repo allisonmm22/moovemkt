@@ -760,7 +760,7 @@ serve(async (req) => {
       // Buscar conexão pela instância
       const { data: conexao, error: conexaoError } = await supabase
         .from('conexoes_whatsapp')
-        .select('id, conta_id, instance_name, token, tipo_canal')
+        .select('id, conta_id, instance_name, token, tipo_canal, agente_ia_id')
         .eq('instance_name', instance)
         .single();
       
@@ -1076,22 +1076,41 @@ serve(async (req) => {
       if (!conversa) {
         console.log('Criando nova conversa com SQL direto...');
         
-        // Para grupos, SEMPRE desativar IA. Para contatos individuais, buscar agente principal
+        // Para grupos, SEMPRE desativar IA. Para contatos individuais, buscar agente
         let agenteIaAtivo = !isGrupo; // Grupos sempre com IA desativada
         let agenteIaId: string | null = null;
         
         if (!isGrupo) {
-          // Buscar agente principal da conta apenas para contatos individuais
-          const { data: agentePrincipal } = await supabase
-            .from('agent_ia')
-            .select('id')
-            .eq('conta_id', conexao.conta_id)
-            .eq('tipo', 'principal')
-            .eq('ativo', true)
-            .maybeSingle();
+          // PRIORIDADE 1: Usar agente vinculado à conexão (se existir)
+          if (conexao.agente_ia_id) {
+            // Verificar se o agente vinculado está ativo
+            const { data: agenteVinculado } = await supabase
+              .from('agent_ia')
+              .select('id, ativo')
+              .eq('id', conexao.agente_ia_id)
+              .single();
+            
+            if (agenteVinculado?.ativo) {
+              agenteIaId = agenteVinculado.id;
+              console.log('Usando agente vinculado à conexão:', agenteIaId);
+            } else {
+              console.log('Agente vinculado à conexão está desativado');
+            }
+          }
           
-          agenteIaId = agentePrincipal?.id || null;
-          console.log('Agente principal encontrado:', agenteIaId);
+          // PRIORIDADE 2: Fallback para agente principal da conta
+          if (!agenteIaId) {
+            const { data: agentePrincipal } = await supabase
+              .from('agent_ia')
+              .select('id')
+              .eq('conta_id', conexao.conta_id)
+              .eq('tipo', 'principal')
+              .eq('ativo', true)
+              .maybeSingle();
+            
+            agenteIaId = agentePrincipal?.id || null;
+            console.log('Usando agente principal da conta (fallback):', agenteIaId);
+          }
         } else {
           console.log('Grupo detectado - IA desativada automaticamente');
         }
@@ -1229,21 +1248,41 @@ serve(async (req) => {
         console.log('Configuração reabrir_com_ia:', reabrirComIA);
         
         if (reabrirComIA) {
-          // Buscar agente principal ativo da conta
-          const { data: agentePrincipal } = await supabase
-            .from('agent_ia')
-            .select('id')
-            .eq('conta_id', conexao.conta_id)
-            .eq('tipo', 'principal')
-            .eq('ativo', true)
-            .maybeSingle();
+          // PRIORIDADE 1: Usar agente vinculado à conexão (se existir)
+          let agenteEncontrado = false;
           
-          if (agentePrincipal) {
-            agenteIaAtivoFinal = true;
-            agenteIaIdFinal = agentePrincipal.id;
-            console.log('Agente principal reativado:', agentePrincipal.id);
-          } else {
-            console.log('Nenhum agente principal ativo encontrado');
+          if (conexao.agente_ia_id) {
+            const { data: agenteVinculado } = await supabase
+              .from('agent_ia')
+              .select('id, ativo')
+              .eq('id', conexao.agente_ia_id)
+              .single();
+            
+            if (agenteVinculado?.ativo) {
+              agenteIaAtivoFinal = true;
+              agenteIaIdFinal = agenteVinculado.id;
+              agenteEncontrado = true;
+              console.log('Agente vinculado à conexão reativado:', agenteVinculado.id);
+            }
+          }
+          
+          // PRIORIDADE 2: Fallback para agente principal da conta
+          if (!agenteEncontrado) {
+            const { data: agentePrincipal } = await supabase
+              .from('agent_ia')
+              .select('id')
+              .eq('conta_id', conexao.conta_id)
+              .eq('tipo', 'principal')
+              .eq('ativo', true)
+              .maybeSingle();
+            
+            if (agentePrincipal) {
+              agenteIaAtivoFinal = true;
+              agenteIaIdFinal = agentePrincipal.id;
+              console.log('Agente principal reativado (fallback):', agentePrincipal.id);
+            } else {
+              console.log('Nenhum agente ativo encontrado');
+            }
           }
         } else {
           console.log('Configuração define reabertura com atendimento humano');

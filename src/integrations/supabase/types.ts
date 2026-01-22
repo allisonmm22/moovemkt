@@ -615,6 +615,7 @@ export type Database = {
       }
       conexoes_whatsapp: {
         Row: {
+          agente_ia_id: string | null
           conta_id: string
           created_at: string
           id: string
@@ -634,6 +635,7 @@ export type Database = {
           webhook_url: string | null
         }
         Insert: {
+          agente_ia_id?: string | null
           conta_id: string
           created_at?: string
           id?: string
@@ -653,6 +655,7 @@ export type Database = {
           webhook_url?: string | null
         }
         Update: {
+          agente_ia_id?: string | null
           conta_id?: string
           created_at?: string
           id?: string
@@ -672,6 +675,13 @@ export type Database = {
           webhook_url?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "conexoes_whatsapp_agente_ia_id_fkey"
+            columns: ["agente_ia_id"]
+            isOneToOne: false
+            referencedRelation: "agent_ia"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "conexoes_whatsapp_conta_id_fkey"
             columns: ["conta_id"]
