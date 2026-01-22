@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
-import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram, Settings, X } from 'lucide-react';
+import { Plug, PlugZap, RefreshCw, Check, Loader2, QrCode, Power, Plus, Smartphone, Trash2, Globe, Zap, Info, ExternalLink, Copy, CheckCircle2, Instagram, Settings, X, Bot } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOnboarding } from '@/contexts/OnboardingContext';
@@ -32,6 +32,14 @@ interface Conexao {
   meta_access_token: string | null;
   meta_webhook_verify_token: string | null;
   tipo_canal?: string | null;
+  agente_ia_id?: string | null;
+}
+
+interface AgenteIA {
+  id: string;
+  nome: string;
+  tipo: string;
+  ativo: boolean;
 }
 
 export default function Conexao() {
@@ -73,6 +81,10 @@ export default function Conexao() {
   const [instagramAccessToken, setInstagramAccessToken] = useState('');
   const [savingInstagram, setSavingInstagram] = useState(false);
 
+  // Estados para Agentes IA
+  const [agentesDisponiveis, setAgentesDisponiveis] = useState<AgenteIA[]>([]);
+  const [savingAgente, setSavingAgente] = useState<string | null>(null);
+
   const fetchConexoes = useCallback(async () => {
     if (!usuario?.conta_id) return;
     
@@ -107,6 +119,26 @@ export default function Conexao() {
   useEffect(() => {
     fetchConexoes();
   }, [fetchConexoes]);
+
+  // Buscar agentes IA disponíveis
+  useEffect(() => {
+    const fetchAgentes = async () => {
+      if (!usuario?.conta_id) return;
+      
+      const { data, error } = await supabase
+        .from('agent_ia')
+        .select('id, nome, tipo, ativo')
+        .eq('conta_id', usuario.conta_id)
+        .eq('ativo', true)
+        .order('tipo', { ascending: false }); // Principais primeiro
+      
+      if (!error && data) {
+        setAgentesDisponiveis(data);
+      }
+    };
+    
+    fetchAgentes();
+  }, [usuario?.conta_id]);
 
   // Auto-refresh status quando aguardando (apenas para Evolution)
   useEffect(() => {
@@ -538,6 +570,27 @@ export default function Conexao() {
     }
   };
 
+  // Vincular agente IA à conexão
+  const handleVincularAgente = async (conexaoId: string, agenteId: string | null) => {
+    setSavingAgente(conexaoId);
+    try {
+      const { error } = await supabase
+        .from('conexoes_whatsapp')
+        .update({ agente_ia_id: agenteId } as any)
+        .eq('id', conexaoId);
+
+      if (error) throw error;
+
+      toast.success(agenteId ? 'Agente vinculado com sucesso' : 'Agente desvinculado');
+      await fetchConexoes();
+    } catch (error) {
+      console.error('Erro ao vincular agente:', error);
+      toast.error('Erro ao vincular agente');
+    } finally {
+      setSavingAgente(null);
+    }
+  };
+
   const getStatusIcon = (conexao: Conexao) => {
     switch (conexao.status) {
       case 'conectado':
@@ -952,6 +1005,43 @@ export default function Conexao() {
                             {savingInstagram ? <Loader2 className="h-4 w-4 animate-spin mx-auto" /> : 'Salvar Credenciais'}
                           </button>
                         </div>
+                      </div>
+                    )}
+
+                    {/* Seleção de Agente IA - Disponível para todas as conexões conectadas */}
+                    {conexao.status === 'conectado' && (
+                      <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Bot className="h-4 w-4 text-primary" />
+                          <h4 className="text-sm font-medium text-foreground">Agente IA Vinculado</h4>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Selecione qual agente atende mensagens recebidas nesta conexão
+                        </p>
+                        <div className="relative">
+                          <select
+                            value={conexao.agente_ia_id || ''}
+                            onChange={(e) => handleVincularAgente(conexao.id, e.target.value || null)}
+                            disabled={savingAgente === conexao.id}
+                            className="w-full h-10 px-3 pr-8 rounded-lg bg-input border border-border text-foreground text-sm appearance-none cursor-pointer disabled:opacity-50"
+                          >
+                            <option value="">Agente padrão (principal da conta)</option>
+                            {agentesDisponiveis.map(agente => (
+                              <option key={agente.id} value={agente.id}>
+                                {agente.nome} ({agente.tipo === 'principal' ? 'Principal' : 'Secundário'})
+                              </option>
+                            ))}
+                          </select>
+                          {savingAgente === conexao.id && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-primary" />
+                          )}
+                        </div>
+                        {conexao.agente_ia_id && (
+                          <p className="text-xs text-primary mt-2 flex items-center gap-1">
+                            <Check className="h-3 w-3" />
+                            Agente específico configurado
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
