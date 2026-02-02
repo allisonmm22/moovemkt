@@ -1,0 +1,38 @@
+name = "crm-workers"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[vars]
+SUPABASE_URL = "https://vgesneiogwomqxwhkdvn.supabase.co"
+
+# Secrets (configurar via: wrangler secret put <NOME>)
+# SUPABASE_SERVICE_ROLE_KEY
+# SUPABASE_ANON_KEY
+# EVOLUTION_API_KEY
+# STRIPE_SECRET_KEY
+# META_APP_ID
+# META_APP_SECRET
+# GOOGLE_CLIENT_ID
+# GOOGLE_CLIENT_SECRET
+# VAPID_PRIVATE_KEY
+# VAPID_PUBLIC_KEY
+# LOVABLE_API_KEY
+
+# Cron triggers para jobs agendados
+[triggers]
+crons = [
+  "*/5 * * * *",   # processar-respostas-pendentes e processar-followups-agendados
+  "*/10 * * * *",  # processar-lembretes
+  "0 3 * * *",     # arquivar-mensagens-antigas (3h UTC)
+  "0 4 * * *"      # consolidar-uso-diario (4h UTC)
+]
+
+# R2 Storage para mídia (criar via: wrangler r2 bucket create whatsapp-media)
+# [[r2_buckets]]
+# binding = "MEDIA_BUCKET"
+# bucket_name = "whatsapp-media"
+
+# KV Storage para cache (opcional)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "xxx"

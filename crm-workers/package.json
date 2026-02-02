@@ -1,0 +1,20 @@
+{
+  "name": "crm-workers",
+  "version": "1.0.0",
+  "description": "CRM Edge Functions migradas para Cloudflare Workers",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "hono": "^4.4.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240614.0",
+    "typescript": "^5.4.5",
+    "wrangler": "^3.60.0"
+  }
+}
