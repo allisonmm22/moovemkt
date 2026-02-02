@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Bun lockfiles (forcar uso do npm no Cloudflare)
+bun.lockb
+bun.lock
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
