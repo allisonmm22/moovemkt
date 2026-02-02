@@ -1,81 +1,60 @@
 
-# Plano: Deploy Direto pelo Navegador (Sem Terminal)
+# Plano: Corrigir Erro de Build no Cloudflare Pages
 
-## Visão Geral
+## Problema Identificado
 
-Vamos conectar o GitHub ao Cloudflare para fazer deploy automático, tudo pelo navegador - sem precisar abrir terminal ou instalar nada no computador.
+O Cloudflare Pages detectou o arquivo `bun.lockb` no repositório e tentou usar o Bun como gerenciador de pacotes. O erro ocorre porque:
 
-## Passo a Passo
+1. O lockfile `bun.lockb` está desatualizado
+2. O Cloudflare usa `--frozen-lockfile` que não permite mudanças
+3. Resultado: falha na instalação de dependências
 
-### Passo 1: Enviar Código para o GitHub (no Lovable)
+## Solução
 
-1. No Lovable, clique no botão **"GitHub"** no canto superior direito
-2. Conecte sua conta GitHub se ainda não estiver conectada
-3. Faça **Push** do código para o repositório
+Vamos configurar o Cloudflare Pages para usar **npm** ao invés de Bun, criando um arquivo `.node-version` e adicionando um arquivo de configuração que força o uso do npm.
 
-### Passo 2: Criar Worker no Cloudflare Dashboard
+## Arquivos a Criar/Modificar
 
-1. Acesse: https://dash.cloudflare.com
-2. No menu lateral, clique em **"Workers & Pages"**
-3. Clique em **"Create"**
-4. Escolha **"Import from GitHub"** (Importar do GitHub)
-5. Conecte sua conta GitHub ao Cloudflare
-6. Selecione o repositório do seu projeto (moovemkt)
-7. Configure:
-   - **Production branch**: `main`
-   - **Build command**: `cd crm-workers && npm install && npm run build`
-   - **Build output directory**: `crm-workers/dist`
-   - **Root directory**: `/` (raiz)
-
-### Passo 3: Configurar Variáveis de Ambiente (Secrets)
-
-1. Após criar o Worker, vá em **Settings → Variables**
-2. Clique em **"Add variable"** e adicione:
-
-| Nome | Valor | Tipo |
-|------|-------|------|
-| `SUPABASE_URL` | `https://vgesneiogwomqxwhkdvn.supabase.co` | Text |
-| `SUPABASE_SERVICE_ROLE_KEY` | (pegar no Supabase) | Encrypt |
-| `SUPABASE_ANON_KEY` | (pegar no Supabase) | Encrypt |
-| `EVOLUTION_API_KEY` | (sua chave Evolution) | Encrypt |
-
-3. Clique em **"Save and Deploy"**
-
-### Passo 4: Obter a URL do Worker
-
-Após o deploy, você receberá uma URL como:
-```
-https://crm-workers.seu-usuario.workers.dev
+### 1. Criar arquivo `.node-version` na raiz
+Define a versão do Node.js para o Cloudflare Pages usar:
+```text
+20
 ```
 
-### Passo 5: Atualizar o Frontend
+### 2. Criar arquivo `crm-workers/.npmrc`
+Garante que npm seja usado corretamente:
+```text
+engine-strict=false
+```
 
-Me envie a URL gerada e eu atualizo o frontend para usar o novo Worker!
+### 3. Atualizar `.gitignore`
+Adicionar os lockfiles do Bun para não serem enviados ao GitHub:
+```text
+bun.lockb
+bun.lock
+```
 
----
+## Configuração no Cloudflare Pages
 
-## Onde Encontrar as Chaves do Supabase
+Após as mudanças, no Cloudflare Pages, configure:
 
-Como seu projeto usa o Supabase externo (`vgesneiogwomqxwhkdvn`):
+| Campo | Valor |
+|-------|-------|
+| **Build command** | `cd crm-workers && npm install && npm run deploy` |
+| **Build output directory** | `crm-workers` |
+| **Root directory** | `/` |
 
-1. Acesse: https://supabase.com/dashboard/project/vgesneiogwomqxwhkdvn/settings/api
-2. Copie:
-   - **anon public**: É a `SUPABASE_ANON_KEY`
-   - **service_role**: É a `SUPABASE_SERVICE_ROLE_KEY` (clique no olhinho para revelar)
+Na seção **Environment variables**, adicione:
+- `NPM_FLAGS` = `--legacy-peer-deps`
 
----
+## Fluxo de Deploy
 
-## Benefícios desta Abordagem
+1. Faço as alterações nos arquivos
+2. Você faz Push para o GitHub no Lovable
+3. O Cloudflare Pages detecta a mudança
+4. O build usa npm (não Bun) e funciona
+5. Worker é implantado com sucesso
 
-- Não precisa instalar nada no computador
-- Não precisa usar terminal/CMD
-- Deploy automático a cada push no GitHub
-- Tudo configurado pelo navegador
-- Mais fácil de manter
+## Observação Importante
 
----
-
-## Observação Técnica
-
-Para que o Cloudflare Pages/Workers funcione com o repositório, precisamos adicionar um arquivo de configuração de build. Vou criar esse arquivo quando você confirmar que quer seguir por este caminho.
-
+Como o projeto principal usa Bun (`bun.lockb`), mas o `crm-workers` precisa de npm para o Cloudflare, a solução isola os dois ambientes.
