@@ -1,60 +1,73 @@
 
-# Plano: Corrigir Erro de Build no Cloudflare Pages
+# Plano: Forcar uso do npm no Cloudflare Pages
 
-## Problema Identificado
+## Problema
 
-O Cloudflare Pages detectou o arquivo `bun.lockb` no repositório e tentou usar o Bun como gerenciador de pacotes. O erro ocorre porque:
+O Cloudflare Pages detecta automaticamente os arquivos `bun.lockb` e `bun.lock` no repositorio e tenta usar o Bun como gerenciador de pacotes. Isso falha porque o lockfile esta desatualizado.
 
-1. O lockfile `bun.lockb` está desatualizado
-2. O Cloudflare usa `--frozen-lockfile` que não permite mudanças
-3. Resultado: falha na instalação de dependências
+## Solucao
 
-## Solução
+Precisamos remover os arquivos de lockfile do Bun do repositorio para que o Cloudflare use npm automaticamente.
 
-Vamos configurar o Cloudflare Pages para usar **npm** ao invés de Bun, criando um arquivo `.node-version` e adicionando um arquivo de configuração que força o uso do npm.
+## Passos
 
-## Arquivos a Criar/Modificar
+### 1. Atualizar .gitignore
 
-### 1. Criar arquivo `.node-version` na raiz
-Define a versão do Node.js para o Cloudflare Pages usar:
+Adicionar `bun.lockb` e `bun.lock` ao arquivo `.gitignore` para que nao sejam enviados ao GitHub.
+
+**Arquivo:** `.gitignore`
+**Adicionar ao final:**
 ```text
-20
-```
-
-### 2. Criar arquivo `crm-workers/.npmrc`
-Garante que npm seja usado corretamente:
-```text
-engine-strict=false
-```
-
-### 3. Atualizar `.gitignore`
-Adicionar os lockfiles do Bun para não serem enviados ao GitHub:
-```text
+# Bun lockfiles (forcar uso do npm no Cloudflare)
 bun.lockb
 bun.lock
 ```
 
-## Configuração no Cloudflare Pages
+### 2. Remover os arquivos do Git
 
-Após as mudanças, no Cloudflare Pages, configure:
+Como os arquivos ja estao no repositorio, eles precisam ser removidos manualmente do Git.
+
+**Voce precisa fazer isso no GitHub:**
+1. Acesse seu repositorio no GitHub
+2. Navegue ate o arquivo `bun.lockb`
+3. Clique no icone de lixeira (Delete this file)
+4. Confirme a exclusao
+5. Repita para o arquivo `bun.lock`
+
+**Alternativa via terminal (se tiver acesso):**
+```bash
+git rm bun.lockb bun.lock
+git commit -m "Remover lockfiles do Bun para forcar npm"
+git push
+```
+
+### 3. Retry do build
+
+Apos remover os arquivos:
+1. Volte ao Cloudflare Pages
+2. Clique em "Retry build"
+3. O Cloudflare vai detectar apenas `package-lock.json` e usar npm
+
+## Configuracao do Build (Cloudflare Pages)
+
+Certifique-se de que as configuracoes estao assim:
 
 | Campo | Valor |
 |-------|-------|
-| **Build command** | `cd crm-workers && npm install && npm run deploy` |
-| **Build output directory** | `crm-workers` |
-| **Root directory** | `/` |
+| Build command | `cd crm-workers && npm install && npm run deploy` |
+| Build output directory | `crm-workers` |
+| Root directory | `/` (vazio ou raiz) |
 
-Na seção **Environment variables**, adicione:
-- `NPM_FLAGS` = `--legacy-peer-deps`
+## Por que isso funciona?
 
-## Fluxo de Deploy
+O Cloudflare Pages detecta o gerenciador de pacotes pela ordem:
+1. Se encontrar `bun.lockb` ou `bun.lock` -> usa Bun
+2. Se encontrar `pnpm-lock.yaml` -> usa pnpm
+3. Se encontrar `yarn.lock` -> usa Yarn
+4. Se encontrar `package-lock.json` -> usa npm
 
-1. Faço as alterações nos arquivos
-2. Você faz Push para o GitHub no Lovable
-3. O Cloudflare Pages detecta a mudança
-4. O build usa npm (não Bun) e funciona
-5. Worker é implantado com sucesso
+Removendo os lockfiles do Bun, o Cloudflare usara automaticamente o npm.
 
-## Observação Importante
+## Arquivos a modificar
 
-Como o projeto principal usa Bun (`bun.lockb`), mas o `crm-workers` precisa de npm para o Cloudflare, a solução isola os dois ambientes.
+1. **`.gitignore`** - Adicionar exclusao dos lockfiles do Bun
