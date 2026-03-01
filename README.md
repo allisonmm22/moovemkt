@@ -1,4 +1,4 @@
-# MooveMKT – Guia de Instalação e Operação
+# Cognityx– Guia de Instalação e Operação
 
 Sistema de atendimento e CRM com WhatsApp (Evolution API), IA e Supabase local.
 
