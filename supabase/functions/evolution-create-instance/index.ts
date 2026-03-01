@@ -33,6 +33,7 @@ serve(async (req) => {
 
     const evolutionApiKey = Deno.env.get('EVOLUTION_API_KEY');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const publicBaseUrl = Deno.env.get('PUBLIC_SUPABASE_URL') || supabaseUrl;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     
     if (!evolutionApiKey) {
@@ -50,7 +51,7 @@ serve(async (req) => {
     console.log('Criando instância na Evolution API:', instanceKey, 'Nome:', nome);
 
     // Construir URL do webhook
-    const webhookUrl = `${supabaseUrl}/functions/v1/whatsapp-webhook`;
+    const webhookUrl = `${publicBaseUrl}/functions/v1/whatsapp-webhook`;
     console.log('Webhook URL:', webhookUrl);
 
     // Criar instância na Evolution API COM webhook configurado na mesma chamada
