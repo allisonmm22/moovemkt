@@ -734,6 +734,18 @@ export default function Conversas() {
               new Date(b.ultima_mensagem_at || 0).getTime() - new Date(a.ultima_mensagem_at || 0).getTime()
             );
           });
+
+          // Se a conversa atual foi atualizada, recarregar mensagens (fallback)
+          if (conversaSelecionadaRef.current?.id === conversaAtualizada.id) {
+            if (fetchMensagensTimeoutRef.current) {
+              clearTimeout(fetchMensagensTimeoutRef.current);
+            }
+            fetchMensagensTimeoutRef.current = setTimeout(() => {
+              if (conversaSelecionadaRef.current?.id === conversaAtualizada.id) {
+                fetchMensagensRef.current?.(conversaAtualizada.id);
+              }
+            }, 300);
+          }
         }
       )
       .subscribe((status, error) => {
