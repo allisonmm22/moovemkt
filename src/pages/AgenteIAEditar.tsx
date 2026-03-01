@@ -849,7 +849,9 @@ function PromptAgenteTab({
         .limit(1)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Erro ao buscar prompt:', error);
+      }
 
       if (data) {
         setPrompt({
@@ -858,7 +860,7 @@ function PromptAgenteTab({
           descricao: data.descricao || '',
         });
       } else {
-        // Criar prompt padrão se não existir
+        // Criar prompt padrão se não existir (ou em caso de erro)
         const novoId = crypto.randomUUID();
         setPrompt({
           id: novoId,
@@ -868,6 +870,13 @@ function PromptAgenteTab({
       }
     } catch (error) {
       console.error('Erro ao buscar prompt:', error);
+      // Garantir que o editor apareça mesmo com erro
+      const novoId = crypto.randomUUID();
+      setPrompt({
+        id: novoId,
+        nome: 'Prompt Principal',
+        descricao: '',
+      });
     } finally {
       setLoading(false);
     }
