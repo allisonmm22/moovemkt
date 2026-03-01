@@ -26,3 +26,8 @@ bun.lock
 *.njsproj
 *.sln
 *.sw?
+.env
+supabase/.env
+supabase/functions/.env
+supabase/.temp/
+supabase/.branches/
