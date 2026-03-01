@@ -1,73 +1,206 @@
-# Welcome to your Lovable project
+# MooveMKT – Guia de Instalação e Operação
 
-## Project info
+Sistema de atendimento e CRM com WhatsApp (Evolution API), IA e Supabase local.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## ✅ Requisitos
 
-## How can I edit this code?
+- Node.js 18+ (recomendado 20/22)
+- Nginx
+- Docker + Docker Compose
+- Supabase CLI
 
-There are several ways of editing your application.
+## 📦 Stack
 
-**Use Lovable**
+- Vite + React + TypeScript
+- Supabase local (Postgres + Auth + Storage + Edge Functions)
+- Evolution API (WhatsApp)
+- Nginx (proxy + static)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🚀 Deploy na VPS (resumo)
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+1) **Clonar** o repositório:
+```bash
+git clone git@github.com:allisonmm22/moovemkt.git
+cd moovemkt
 ```
 
-**Edit a file directly in GitHub**
+2) **Instalar dependências**:
+```bash
+npm install
+```
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+3) **Subir Supabase local**:
+```bash
+supabase start
+supabase db reset
+```
 
-**Use GitHub Codespaces**
+4) **Configurar `.env` (frontend)**
+Crie `.env` baseado em `.env.example`:
+```
+VITE_SUPABASE_PROJECT_ID="local"
+VITE_SUPABASE_PUBLISHABLE_KEY="<ANON_KEY>"
+VITE_SUPABASE_URL="http://<IP>:8000"
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+5) **Configurar Edge Functions (.env)**
+Crie `supabase/functions/.env` baseado em `supabase/functions/.env.example`:
+```
+EVOLUTION_API_KEY=<EVOLUTION_API_KEY>
+PUBLIC_SUPABASE_URL=http://<IP>:8000
+EXTERNAL_SUPABASE_URL=http://<IP>:8000
+EXTERNAL_SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY>
+```
 
-## What technologies are used for this project?
+6) **Build e publicar**:
+```bash
+npm run build
+rsync -a --delete dist/ /var/www/moovemkt/
+```
 
-This project is built with:
+---
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🌐 Nginx (exemplo)
 
-## How can I deploy this project?
+### Frontend
+```nginx
+server {
+  listen 80;
+  server_name _;
+  root /var/www/moovemkt;
+  index index.html;
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+  location / {
+    try_files $uri /index.html;
+  }
+}
+```
 
-## Can I connect a custom domain to my Lovable project?
+### Supabase Proxy (porta 8000)
+```nginx
+server {
+  listen 8000;
+  server_name _;
+  client_max_body_size 25m;
 
-Yes, you can!
+  location /realtime/ {
+    proxy_pass http://127.0.0.1:54321;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "Upgrade";
+    proxy_set_header Host $host;
+  }
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+  location /storage/ {
+    proxy_pass http://127.0.0.1:54321;
+  }
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+  location / {
+    proxy_pass http://127.0.0.1:54321;
+  }
+}
+```
+
+---
+
+## 🔑 Credenciais Supabase Local
+
+Verifique com:
+```bash
+supabase status
+```
+
+Use:
+- **ANON_KEY** no `.env` do frontend
+- **SERVICE_ROLE_KEY** nas Edge Functions
+
+---
+
+## 📷 Storage / Mídia
+
+Bucket usado: **whatsapp-media** (público)
+
+Criar bucket:
+```bash
+supabase storage create-bucket whatsapp-media --public
+```
+
+Políticas (RLS) para permitir upload/download:
+```sql
+-- anon
+create policy "whatsapp-media select anon" on storage.objects for select to anon using (bucket_id='whatsapp-media');
+create policy "whatsapp-media insert anon" on storage.objects for insert to anon with check (bucket_id='whatsapp-media');
+
+-- authenticated
+create policy "whatsapp-media select" on storage.objects for select to authenticated using (bucket_id='whatsapp-media');
+create policy "whatsapp-media insert" on storage.objects for insert to authenticated with check (bucket_id='whatsapp-media');
+```
+
+---
+
+## 🤖 Evolution API
+
+Configuração da API:
+- URL: `https://evolution.cognityx.com.br`
+- KEY: definida em `EVOLUTION_API_KEY`
+
+Webhook usado:
+```
+http://<IP>:8000/functions/v1/whatsapp-webhook
+```
+
+---
+
+## 🧠 Agentes de IA
+
+O prompt principal fica em **Agente IA → Prompt**.
+Se não existir etapa criada, use o botão **“Criar Prompt”**.
+
+Ações inteligentes precisam do prefixo **@**:
+- `@negociacao:criar`
+- `@etapa:qualificacao`
+- `@tag:vip`
+
+---
+
+## 🔧 Comandos úteis
+
+```bash
+# Subir Supabase local
+supabase start
+
+# Reiniciar Supabase local
+supabase stop && supabase start
+
+# Resetar banco local
+supabase db reset
+```
+
+---
+
+## 🛠️ Troubleshooting
+
+**Erro 401 / Invalid JWT**
+- Faça logout/login e recarregue (Ctrl+F5)
+
+**Upload de imagem falha (413)**
+- Aumente `client_max_body_size` no Nginx
+
+**Prompt não aparece**
+- Crie etapa com botão “Criar Prompt”
+
+---
+
+## 📌 URLs padrão
+
+- Frontend: `http://<IP>`
+- Supabase (proxy): `http://<IP>:8000`
+- Studio local (somente local): `http://127.0.0.1:54323`
+
+---
+
+## 📝 Licença
+
+Uso privado do projeto.
