@@ -169,6 +169,16 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const [camposValores, setCamposValores] = useState<Record<string, string>>({});
   const saveTimeoutRef = useRef<Record<string, NodeJS.Timeout>>({});
 
+  // Caches simples para reduzir fetches repetidos
+  const cacheRef = useRef<{ 
+    funis?: { data: Funil[]; ts: number };
+    tags?: { data: TagItem[]; ts: number };
+    campos?: { data: CampoPersonalizado[]; grupos: GrupoCampos[]; ts: number };
+    camposValores?: Record<string, { data: Record<string, string>; ts: number }>;
+    negociacoes?: Record<string, { data: Negociacao[]; ts: number }>;
+  }>({});
+  const inflightRef = useRef<{ [key: string]: boolean }>({});
+
   useEffect(() => {
     setNomeEdit(contato.nome);
     setTelefoneEdit(contato.telefone);
@@ -211,6 +221,16 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
   const fetchCamposPersonalizados = async () => {
     try {
+      const cached = cacheRef.current.campos;
+      const now = Date.now();
+      if (cached && now - cached.ts < 30000) {
+        setGruposCampos(cached.grupos || []);
+        setCamposPersonalizados(cached.data || []);
+        return;
+      }
+      if (inflightRef.current.campos) return;
+      inflightRef.current.campos = true;
+
       const [{ data: grupos }, { data: campos }] = await Promise.all([
         supabase.from('campos_personalizados_grupos').select('id, nome').order('ordem'),
         supabase.from('campos_personalizados').select('*').order('ordem')
@@ -229,13 +249,27 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       }));
       
       setCamposPersonalizados(camposComGrupo);
+      cacheRef.current.campos = { data: camposComGrupo, grupos: grupos || [], ts: now };
     } catch (error) {
       console.error('Erro ao buscar campos personalizados:', error);
+    } finally {
+      inflightRef.current.campos = false;
     }
   };
 
   const fetchCamposValores = async () => {
     try {
+      const now = Date.now();
+      const cacheKey = contato.id;
+      const cached = cacheRef.current.camposValores?.[cacheKey];
+      if (cached && now - cached.ts < 10000) {
+        setCamposValores(cached.data || {});
+        return;
+      }
+      const inflightKey = `camposValores:${cacheKey}`;
+      if (inflightRef.current[inflightKey]) return;
+      inflightRef.current[inflightKey] = true;
+
       const { data } = await supabase
         .from('contato_campos_valores')
         .select('campo_id, valor')
@@ -244,8 +278,15 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       const valores: Record<string, string> = {};
       data?.forEach(v => valores[v.campo_id] = v.valor || '');
       setCamposValores(valores);
+      cacheRef.current.camposValores = {
+        ...(cacheRef.current.camposValores || {}),
+        [cacheKey]: { data: valores, ts: now }
+      };
     } catch (error) {
       console.error('Erro ao buscar valores dos campos:', error);
+    } finally {
+      const inflightKey = `camposValores:${contato.id}`;
+      inflightRef.current[inflightKey] = false;
     }
   };
 
@@ -367,6 +408,15 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
 
   const fetchFunis = async () => {
     try {
+      const cached = cacheRef.current.funis;
+      const now = Date.now();
+      if (cached && now - cached.ts < 60000) {
+        setFunis(cached.data || []);
+        return;
+      }
+      if (inflightRef.current.funis) return;
+      inflightRef.current.funis = true;
+
       const { data, error } = await supabase
         .from('funis')
         .select(`
@@ -384,13 +434,25 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       }));
       
       setFunis(funisOrdenados);
+      cacheRef.current.funis = { data: funisOrdenados, ts: now };
     } catch (error) {
       console.error('Erro ao buscar funis:', error);
+    } finally {
+      inflightRef.current.funis = false;
     }
   };
 
   const fetchTagsDisponiveis = async () => {
     try {
+      const cached = cacheRef.current.tags;
+      const now = Date.now();
+      if (cached && now - cached.ts < 60000) {
+        setTagsDisponiveis(cached.data || []);
+        return;
+      }
+      if (inflightRef.current.tags) return;
+      inflightRef.current.tags = true;
+
       const { data, error } = await supabase
         .from('tags')
         .select('id, nome, cor')
@@ -398,8 +460,11 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       
       if (error) throw error;
       setTagsDisponiveis(data || []);
+      cacheRef.current.tags = { data: data || [], ts: now };
     } catch (error) {
       console.error('Erro ao buscar tags:', error);
+    } finally {
+      inflightRef.current.tags = false;
     }
   };
 
@@ -443,6 +508,17 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
   const fetchNegociacoes = async () => {
     setLoadingNegociacoes(true);
     try {
+      const now = Date.now();
+      const cacheKey = contato.id;
+      const cached = cacheRef.current.negociacoes?.[cacheKey];
+      if (cached && now - cached.ts < 10000) {
+        setNegociacoes(cached.data || []);
+        return;
+      }
+      const inflightKey = `negociacoes:${cacheKey}`;
+      if (inflightRef.current[inflightKey]) return;
+      inflightRef.current[inflightKey] = true;
+
       const { data, error } = await supabase
         .from('negociacoes')
         .select(`
@@ -475,10 +551,15 @@ export function ContatoSidebar({ contato, conversaId, isOpen, onClose, onContato
       }));
       
       setNegociacoes(transformedData);
+      cacheRef.current.negociacoes = {
+        ...(cacheRef.current.negociacoes || {}),
+        [cacheKey]: { data: transformedData, ts: now }
+      };
     } catch (error) {
       console.error('Erro ao buscar negociações:', error);
     } finally {
       setLoadingNegociacoes(false);
+      inflightRef.current[`negociacoes:${contato.id}`] = false;
     }
   };
 
