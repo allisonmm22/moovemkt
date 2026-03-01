@@ -624,17 +624,17 @@ export default function Conversas() {
                 );
               });
               
-              // FALLBACK: Debounced refetch para garantir consistência
+              // FALLBACK: Debounced refetch mais leve para reduzir fetches
               if (fetchMensagensTimeoutRef.current) {
                 clearTimeout(fetchMensagensTimeoutRef.current);
               }
               fetchMensagensTimeoutRef.current = setTimeout(() => {
                 // Verificar se ainda é a mesma conversa
                 if (conversaSelecionadaRef.current?.id === mensagemPayload.conversa_id) {
-                  console.log('Fallback: refetch de mensagens para conversa aberta');
+                  console.log('Fallback: refetch de mensagens para conversa aberta (leve)');
                   fetchMensagensRef.current?.(mensagemPayload.conversa_id);
                 }
-              }, 400);
+              }, 2000);
               
               // Marcar como lida se é mensagem de entrada na conversa aberta
               if (mensagemPayload.direcao === 'entrada') {
