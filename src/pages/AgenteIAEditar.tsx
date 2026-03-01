@@ -860,23 +860,12 @@ function PromptAgenteTab({
           descricao: data.descricao || '',
         });
       } else {
-        // Criar prompt padrão se não existir (ou em caso de erro)
-        const novoId = crypto.randomUUID();
-        setPrompt({
-          id: novoId,
-          nome: 'Prompt Principal',
-          descricao: '',
-        });
+        // Sem etapa criada ainda
+        setPrompt(null);
       }
     } catch (error) {
       console.error('Erro ao buscar prompt:', error);
-      // Garantir que o editor apareça mesmo com erro
-      const novoId = crypto.randomUUID();
-      setPrompt({
-        id: novoId,
-        nome: 'Prompt Principal',
-        descricao: '',
-      });
+      setPrompt(null);
     } finally {
       setLoading(false);
     }
@@ -914,6 +903,38 @@ function PromptAgenteTab({
     }
   };
 
+  const createPrompt = async () => {
+    setSaving(true);
+    try {
+      const novoId = crypto.randomUUID();
+      const { data, error } = await supabase
+        .from('agent_ia_etapas')
+        .insert({
+          id: novoId,
+          agent_ia_id: agentId,
+          numero: 1,
+          tipo: null,
+          nome: 'Prompt Principal',
+          descricao: '',
+        })
+        .select('*')
+        .single();
+
+      if (error) throw error;
+      setPrompt({
+        id: data.id,
+        nome: data.nome,
+        descricao: data.descricao || '',
+      });
+      toast.success('Prompt criado com sucesso');
+    } catch (error) {
+      console.error('Erro ao criar prompt:', error);
+      toast.error('Erro ao criar prompt');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -922,7 +943,32 @@ function PromptAgenteTab({
     );
   }
 
-  if (!prompt) return null;
+  if (!prompt) {
+    return (
+      <div className="space-y-6 max-w-4xl">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-12 w-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+            <MessageCircle className="h-6 w-6 text-emerald-500" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-foreground">Prompt do Agente</h2>
+            <p className="text-sm text-muted-foreground">
+              Nenhuma etapa criada ainda. Crie o prompt para começar.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={createPrompt}
+          disabled={saving}
+          className="flex items-center gap-2 h-11 px-6 rounded-xl bg-emerald-500 text-white font-medium hover:bg-emerald-600 transition-colors disabled:opacity-50 shadow-lg shadow-emerald-500/25"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+          Criar Prompt
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
